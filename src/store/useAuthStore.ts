@@ -84,13 +84,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // 1. Cargar perfiles dinámicos desde la tabla 'profiles' en Supabase
       await get().loadProfiles();
 
-      // 2. Comprobar sesión de Supabase Auth
+      // 2. Comprobar sesión activa de Supabase Auth
       const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.user && !get().currentUser) {
+      if (sessionData?.session?.user) {
         const email = sessionData.session.user.email || '';
-        const currentUsersList = get().users;
+        const currentUsersList = get().allProfiles;
         const matched = currentUsersList.find((u) => getUserInternalEmail(u) === email || u.email === email);
         if (matched) {
+          sessionStorage.setItem('elarx_active_user_id', matched.id);
           set({
             currentUser: matched,
             selectedUserForPin: matched,
@@ -99,13 +100,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
-      // 3. Configurar listener de cambios de estado de Supabase Auth
+      // 3. Fallback: Si no hay token de Supabase Auth, restaurar usuario autenticado desde sessionStorage
+      if (!get().currentUser) {
+        const storedUserId = sessionStorage.getItem('elarx_active_user_id');
+        if (storedUserId) {
+          const currentUsersList = get().allProfiles;
+          const matched = currentUsersList.find((u) => u.id === storedUserId && u.isActive !== false);
+          if (matched) {
+            set({
+              currentUser: matched,
+              selectedUserForPin: matched,
+              isAuthenticated: true,
+            });
+          }
+        }
+      }
+
+      // 4. Configurar listener de cambios de estado de Supabase Auth
       supabase.auth.onAuthStateChange(async (event: any, session: any) => {
         if (event === 'SIGNED_IN' && session?.user) {
           const email = session.user.email || '';
-          const currentUsersList = get().users;
+          const currentUsersList = get().allProfiles;
           const matched = currentUsersList.find((u) => getUserInternalEmail(u) === email || u.email === email);
           if (matched && get().currentUser?.id !== matched.id) {
+            sessionStorage.setItem('elarx_active_user_id', matched.id);
             set({
               currentUser: matched,
               selectedUserForPin: matched,
@@ -113,6 +131,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             });
           }
         } else if (event === 'SIGNED_OUT') {
+          sessionStorage.removeItem('elarx_active_user_id');
           set({ currentUser: null, isAuthenticated: false });
         }
       });
@@ -139,6 +158,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: false });
       return { success: false, message: 'PIN incorrecto. Inténtalo de nuevo.' };
     }
+
+    // Guardar ID en sessionStorage para persistencia en recargas (F5)
+    sessionStorage.setItem('elarx_active_user_id', selectedUserForPin.id);
 
     // Intento opcional de autenticación en Supabase Auth con PIN como contraseña
     const internalEmail = getUserInternalEmail(selectedUserForPin);
@@ -167,12 +189,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
+      sessionStorage.removeItem('elarx_active_user_id');
       await supabase.auth.signOut().catch((err: any) => {
         console.warn('Error en signOut de Supabase:', err);
       });
     } catch (e) {
       console.warn('Error durante logout:', e);
     } finally {
+      sessionStorage.removeItem('elarx_active_user_id');
       set({
         currentUser: null,
         isAuthenticated: false,
@@ -181,6 +205,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loginAs: (user: User) => {
+    sessionStorage.setItem('elarx_active_user_id', user.id);
     set({ currentUser: user, isAuthenticated: true });
   },
 

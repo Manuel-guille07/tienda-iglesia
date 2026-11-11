@@ -24,6 +24,7 @@ export const ProductCatalog: React.FC = () => {
   ];
 
   const filteredProducts = products.filter((p) => {
+    if (p.isSellable === false) return false;
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

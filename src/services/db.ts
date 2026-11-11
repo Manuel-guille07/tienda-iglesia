@@ -48,11 +48,17 @@ export function generateUUID(): string {
 // ============================================================================
 
 // 1. RAW MATERIALS
-// Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available
+// Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available, category, is_sellable, is_quick_access, price
 export function toRawMaterialSnake(item: Record<string, any>) {
   const isOutOfStock = Boolean(item.isOutOfStock ?? item.is_out_of_stock ?? false);
   const isAvailable = typeof item.is_available === 'boolean' ? item.is_available : !isOutOfStock;
   const minStockAlert = Number(item.min_stock_alert ?? item.minStock ?? item.min_stock ?? 0);
+  const isSellable = typeof item.is_sellable === 'boolean'
+    ? item.is_sellable
+    : (typeof item.isSellable === 'boolean' ? item.isSellable : true);
+  const isQuickAccess = typeof item.is_quick_access === 'boolean'
+    ? item.is_quick_access
+    : (typeof item.isQuickAccess === 'boolean' ? item.isQuickAccess : (item.isPreset ?? false));
 
   const payload: Record<string, any> = {
     name: item.name,
@@ -61,7 +67,14 @@ export function toRawMaterialSnake(item: Record<string, any>) {
     min_stock_alert: minStockAlert,
     cost_per_unit: Number(item.cost_per_unit ?? item.costPerUnit ?? 0),
     is_available: isAvailable,
+    category: item.category || 'cafeteria',
+    is_sellable: isSellable,
+    is_quick_access: isQuickAccess,
   };
+
+  if (typeof item.price === 'number') {
+    payload.price = item.price;
+  }
 
   const validId = cleanUUID(item.id);
   if (validId) {
@@ -81,6 +94,14 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
     : !(row.is_out_of_stock ?? row.isOutOfStock ?? false);
   const isOutOfStock = !isAvailable;
 
+  const isSellable = typeof row.is_sellable === 'boolean'
+    ? row.is_sellable
+    : (typeof row.isSellable === 'boolean' ? row.isSellable : true);
+
+  const isQuickAccess = typeof row.is_quick_access === 'boolean'
+    ? row.is_quick_access
+    : (typeof row.isQuickAccess === 'boolean' ? row.isQuickAccess : (row.is_preset ?? row.isPreset ?? false));
+
   return {
     id: String(row.id),
     name: row.name,
@@ -89,6 +110,12 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
     minStock,
     costPerUnit,
     isOutOfStock,
+    category: row.category || 'cafeteria',
+    isSellable,
+    is_sellable: isSellable,
+    isQuickAccess,
+    is_quick_access: isQuickAccess,
+    price: typeof row.price === 'number' ? row.price : undefined,
     // Compatibilidad bidireccional
     current_stock: currentStock,
     min_stock: minStock,
@@ -363,6 +390,30 @@ export async function updateRawMaterialStock(materialId: string, newStock: numbe
     return true;
   } catch (err) {
     console.warn('[Supabase] updateRawMaterialStock catch:', err);
+    return false;
+  }
+}
+
+/**
+ * Elimina un insumo/producto directamente de Supabase
+ */
+export async function deleteRawMaterial(materialId: string): Promise<boolean> {
+  try {
+    const validId = cleanUUID(materialId);
+    if (!validId) return false;
+
+    const { error } = await supabase
+      .from('raw_materials')
+      .delete()
+      .eq('id', validId);
+
+    if (error) {
+      console.warn('[Supabase] deleteRawMaterial warning:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] deleteRawMaterial catch:', err);
     return false;
   }
 }

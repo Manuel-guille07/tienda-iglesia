@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { Boxes, Plus, Coffee, Edit } from 'lucide-react';
+import { Boxes, Plus, Coffee, Edit, Trash2, Tag, CheckCircle, EyeOff, Zap } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
 import { AddRawMaterialModal } from './AddRawMaterialModal';
 import { RecipeEditorModal } from './RecipeEditorModal';
-import { Product } from '../../types';
+import { Product, RawMaterial } from '../../types';
 import toast from 'react-hot-toast';
 
 export const InventoryScreen: React.FC = () => {
   const { t } = useLanguage();
-  const { rawMaterials, products, restockRawMaterial, toggleRawMaterialAvailability } = usePOSStore();
+  const { rawMaterials, products, restockRawMaterial, toggleRawMaterialAvailability, deleteRawMaterialAction } = usePOSStore();
   const [tab, setTab] = useState<'raw' | 'recipes'>('raw');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number>(10);
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [editingRecipeProduct, setEditingRecipeProduct] = useState<Product | null>(null);
 
@@ -27,6 +28,26 @@ export const InventoryScreen: React.FC = () => {
       restockRawMaterial(selectedId, amount);
       toast.success(t('toast.stockUpdated'));
       setSelectedId(null);
+    }
+  };
+
+  const handleDelete = async (material: RawMaterial) => {
+    if (window.confirm(`¿Estás seguro de eliminar "${material.name}" de Supabase e inventario?`)) {
+      const toastId = toast.loading('Eliminando de Supabase...');
+      const success = await deleteRawMaterialAction(material.id);
+      toast.dismiss(toastId);
+      if (success) {
+        toast.success(`"${material.name}" eliminado correctamente`);
+      }
+    }
+  };
+
+  const getCategoryLabel = (cat?: string) => {
+    switch (cat) {
+      case 'bebidas': return 'Bebidas';
+      case 'snacks': return 'Snacks';
+      case 'insumos': return 'Insumos / Desechables';
+      default: return 'Cafetería';
     }
   };
 
@@ -47,7 +68,7 @@ export const InventoryScreen: React.FC = () => {
               onClick={() => setTab('raw')}
               className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${tab === 'raw' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}
             >
-              Insumos
+              Insumos & Catálogo
             </button>
             <button
               onClick={() => setTab('recipes')}
@@ -62,9 +83,12 @@ export const InventoryScreen: React.FC = () => {
               variant="primary"
               size="sm"
               icon={<Plus className="w-4 h-4" />}
-              onClick={() => setIsAddMaterialOpen(true)}
+              onClick={() => {
+                setEditingMaterial(null);
+                setIsAddMaterialOpen(true);
+              }}
             >
-              + Añadir Insumo
+              + Añadir Producto / Insumo
             </Button>
           ) : (
             <Button
@@ -86,71 +110,124 @@ export const InventoryScreen: React.FC = () => {
         rawMaterials.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
             <Boxes className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="font-semibold text-white">No hay insumos registrados en Supabase</p>
-            <p className="text-xs text-slate-400 mt-1">Añade tu primer insumo con el botón superior o sincroniza con la nube.</p>
+            <p className="font-semibold text-white">No hay insumos ni productos registrados en Supabase</p>
+            <p className="text-xs text-slate-400 mt-1">Añade tu primer insumo o producto con el botón superior.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {rawMaterials.map((m) => {
-            const isLow = m.currentStock <= m.minStock;
-            return (
-              <div
-                key={m.id}
-                className={`bg-slate-900 border rounded-2xl p-4 flex flex-col justify-between transition ${
-                  m.isOutOfStock ? 'border-rose-500/50 bg-rose-950/10' : 'border-slate-800'
-                }`}
-              >
-                <div>
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-sm text-white">{m.name}</h3>
-                    {m.isOutOfStock ? (
-                      <span className="text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full">
-                        Agotado
-                      </span>
-                    ) : (
-                      <Badge variant={isLow ? 'warning' : 'success'} size="sm">
-                        {isLow ? 'Bajo' : 'OK'}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="my-2">
-                    <span className="text-3xl font-black text-white">{m.currentStock}</span>
-                    <span className="text-xs text-slate-400 ml-1">{m.unit}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">Mínimo: {m.minStock} {m.unit}</p>
+              const isLow = m.currentStock <= m.minStock;
+              const isSellable = m.isSellable !== false;
 
-                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800 text-xs">
-                    <span className="text-[11px] text-slate-400">Estado:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toggleRawMaterialAvailability(m.id);
-                        toast.success(m.isOutOfStock ? `${m.name}: Disponible` : `${m.name}: Agotado`);
-                      }}
-                      className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
-                        m.isOutOfStock
-                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      }`}
+              return (
+                <div
+                  key={m.id}
+                  className={`bg-slate-900 border rounded-2xl p-4 flex flex-col justify-between transition ${
+                    m.isOutOfStock ? 'border-rose-500/50 bg-rose-950/10' : 'border-slate-800'
+                  }`}
+                >
+                  <div>
+                    <div className="flex justify-between items-start gap-1">
+                      <div>
+                        <h3 className="font-bold text-sm text-white leading-snug">{m.name}</h3>
+                        <span className="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider block mt-0.5">
+                          {getCategoryLabel(m.category)}
+                        </span>
+                      </div>
+                      {m.isOutOfStock ? (
+                        <span className="text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full shrink-0">
+                          Agotado
+                        </span>
+                      ) : (
+                        <Badge variant={isLow ? 'warning' : 'success'} size="sm">
+                          {isLow ? 'Bajo' : 'OK'}
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="my-2 flex items-baseline justify-between">
+                      <div>
+                        <span className="text-3xl font-black text-white">{m.currentStock}</span>
+                        <span className="text-xs text-slate-400 ml-1">{m.unit}</span>
+                      </div>
+                      {isSellable && typeof m.price === 'number' && (
+                        <span className="text-sm font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded-lg">
+                          {m.price.toFixed(2)}€
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                      {isSellable ? (
+                        <span className="bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 text-cyan-400" /> POS Visible
+                        </span>
+                      ) : (
+                        <span className="bg-slate-850 text-slate-400 border border-slate-750 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <EyeOff className="w-3 h-3 text-slate-500" /> Insumo Interno
+                        </span>
+                      )}
+                      {m.isQuickAccess && (
+                        <span className="bg-amber-950/60 text-amber-300 border border-amber-800/60 px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-amber-400" /> Botonera
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800 text-xs">
+                      <span className="text-[11px] text-slate-400">Estado:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          toggleRawMaterialAvailability(m.id);
+                          toast.success(m.isOutOfStock ? `${m.name}: Disponible` : `${m.name}: Agotado`);
+                        }}
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                          m.isOutOfStock
+                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${m.isOutOfStock ? 'bg-rose-500' : 'bg-emerald-400'}`} />
+                        {m.isOutOfStock ? 'Agotado' : 'Disponible'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 mt-3">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full font-semibold text-xs"
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                      onClick={() => { setSelectedId(m.id); setAmount(m.unit === 'ml' ? 1000 : 20); }}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full ${m.isOutOfStock ? 'bg-rose-500' : 'bg-emerald-400'}`} />
-                      {m.isOutOfStock ? 'Agotado' : 'Disponible'}
-                    </button>
+                      {t('inventory.addStock')}
+                    </Button>
+
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button
+                        onClick={() => {
+                          setEditingMaterial(m);
+                          setIsAddMaterialOpen(true);
+                        }}
+                        className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Edit className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Editar</span>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(m)}
+                        className="p-1.5 bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                        title="Eliminar insumo / producto"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full mt-3 font-semibold text-xs"
-                  icon={<Plus className="w-3.5 h-3.5" />}
-                  onClick={() => { setSelectedId(m.id); setAmount(m.unit === 'ml' ? 1000 : 20); }}
-                >
-                  {t('inventory.addStock')}
-                </Button>
-              </div>
-            );
-          })}
+              );
+            })}
           </div>
         )
       ) : (
@@ -215,7 +292,11 @@ export const InventoryScreen: React.FC = () => {
 
       <AddRawMaterialModal
         isOpen={isAddMaterialOpen}
-        onClose={() => setIsAddMaterialOpen(false)}
+        onClose={() => {
+          setIsAddMaterialOpen(false);
+          setEditingMaterial(null);
+        }}
+        initialMaterial={editingMaterial}
       />
 
       <RecipeEditorModal

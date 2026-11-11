@@ -10,7 +10,7 @@ export interface User {
   isActive?: boolean;
 }
 
-export type Category = 'cafeteria' | 'bebidas' | 'snacks' | 'donativos' | 'merchandising';
+export type Category = 'cafeteria' | 'bebidas' | 'snacks' | 'donativos' | 'merchandising' | 'insumos';
 
 export interface RawMaterial {
   id: string;
@@ -20,6 +20,10 @@ export interface RawMaterial {
   minStock: number;
   costPerUnit: number;
   isOutOfStock?: boolean;
+  category?: Category;
+  isSellable?: boolean;
+  isQuickAccess?: boolean;
+  price?: number;
 }
 
 export interface RecipeItem {
@@ -34,6 +38,8 @@ export interface Product {
   category: Category;
   description?: string;
   isPreset?: boolean; // Quick keypad button on cafeteria screen
+  isQuickAccess?: boolean; // Customizable Quick Keypad button
+  isSellable?: boolean;
   recipe?: RecipeItem[];
   directStock?: number; // for direct items like bottled water or snacks
   minDirectStock?: number;

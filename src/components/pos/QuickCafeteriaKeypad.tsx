@@ -7,7 +7,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
   const { t } = useLanguage();
   const { products, addToCart } = usePOSStore();
 
-  const presets = products.filter((p) => p.isPreset);
+  const presets = products.filter((p) => (p.isQuickAccess || p.isPreset) && p.isSellable !== false);
 
   const getColorClass = (color?: string) => {
     switch (color) {

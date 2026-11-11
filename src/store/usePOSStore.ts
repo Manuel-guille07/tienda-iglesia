@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Product, RawMaterial, CartItem, Sale, PaymentMethod, Role, RecipeItem } from '../types';
-import { getRawMaterials, insertRawMaterial, getSales, insertSale, deleteSale, updateRawMaterialStock } from '../services/db';
+import { getRawMaterials, insertRawMaterial, deleteRawMaterial, getSales, insertSale, deleteSale, updateRawMaterialStock } from '../services/db';
 import toast from 'react-hot-toast';
 
 export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts: Product[] = []): Product[] {
@@ -12,16 +12,28 @@ export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts:
 
   return rawMaterials.map((mat, idx) => {
     const existing = savedProducts.find((p) => p.id === mat.id || p.name.toLowerCase() === mat.name.toLowerCase());
-    const basePrice = mat.costPerUnit > 0 ? Number((mat.costPerUnit * 2).toFixed(2)) : 1.20;
-    const finalPrice = existing?.price ? existing.price : Math.max(1.00, basePrice);
+    const basePrice = mat.price !== undefined && mat.price !== null
+      ? mat.price
+      : (mat.costPerUnit > 0 ? Number((mat.costPerUnit * 2).toFixed(2)) : 1.20);
+    const finalPrice = existing?.price !== undefined ? existing.price : (mat.price !== undefined ? mat.price : Math.max(1.00, basePrice));
+
+    const isSellable = mat.isSellable !== undefined
+      ? mat.isSellable
+      : (existing?.isSellable !== undefined ? existing.isSellable : true);
+
+    const isQuickAccess = mat.isQuickAccess !== undefined
+      ? mat.isQuickAccess
+      : (existing?.isQuickAccess !== undefined ? existing.isQuickAccess : false);
 
     return {
       id: mat.id,
       name: mat.name,
       price: finalPrice,
-      category: 'cafeteria',
-      description: `${mat.name} (${mat.unit}) - En stock: ${mat.currentStock}`,
-      isPreset: true,
+      category: mat.category || existing?.category || 'cafeteria',
+      description: `${mat.name} (${mat.unit}) - Stock: ${mat.currentStock}`,
+      isPreset: isQuickAccess || Boolean(existing?.isPreset),
+      isQuickAccess,
+      isSellable,
       color: existing?.color || colors[idx % colors.length],
       badge: mat.isOutOfStock || mat.currentStock <= 0 ? 'Agotado' : (mat.currentStock <= mat.minStock ? 'Bajo' : undefined),
       recipe: existing?.recipe || [
@@ -71,6 +83,7 @@ interface POSState {
   adjustRawStock: (materialId: string, newStock: number) => void;
   adjustProductStock: (productId: string, newStock: number) => void;
   addRawMaterial: (material: Omit<RawMaterial, 'id'>) => RawMaterial;
+  deleteRawMaterialAction: (materialId: string) => Promise<boolean>;
   toggleRawMaterialAvailability: (materialId: string) => void;
   updateRawMaterial: (materialId: string, updates: Partial<RawMaterial>) => void;
   updateProductRecipe: (productId: string, recipe: RecipeItem[]) => void;
@@ -104,6 +117,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
         minStock: Number(item.minStock ?? item.min_stock_alert ?? item.min_stock ?? 0),
         costPerUnit: Number(item.costPerUnit ?? item.cost_per_unit ?? 0),
         isOutOfStock: Boolean(item.isOutOfStock ?? (typeof item.is_available === 'boolean' ? !item.is_available : false)),
+        category: item.category || 'cafeteria',
+        isSellable: item.isSellable ?? item.is_sellable ?? true,
+        isQuickAccess: item.isQuickAccess ?? item.is_quick_access ?? false,
+        price: typeof item.price === 'number' ? item.price : undefined,
       }));
 
       const products = buildDynamicProducts(rawMaterials, get().products);
@@ -131,6 +148,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
         minStock: Number(item.minStock ?? item.min_stock_alert ?? item.min_stock ?? 0),
         costPerUnit: Number(item.costPerUnit ?? item.cost_per_unit ?? 0),
         isOutOfStock: Boolean(item.isOutOfStock ?? (typeof item.is_available === 'boolean' ? !item.is_available : false)),
+        category: item.category || 'cafeteria',
+        isSellable: item.isSellable ?? item.is_sellable ?? true,
+        isQuickAccess: item.isQuickAccess ?? item.is_quick_access ?? false,
+        price: typeof item.price === 'number' ? item.price : undefined,
       }));
 
       const products = buildDynamicProducts(rawMaterials, get().products);
@@ -425,6 +446,22 @@ export const usePOSStore = create<POSState>((set, get) => ({
       });
 
     return newMaterial;
+  },
+
+  deleteRawMaterialAction: async (materialId: string) => {
+    const updatedRaw = get().rawMaterials.filter((m) => m.id !== materialId);
+    const updatedProducts = buildDynamicProducts(updatedRaw, get().products);
+
+    set({
+      rawMaterials: updatedRaw,
+      products: updatedProducts,
+    });
+
+    const success = await deleteRawMaterial(materialId);
+    if (!success) {
+      toast.error('Error al eliminar el insumo de Supabase');
+    }
+    return success;
   },
 
   toggleRawMaterialAvailability: (materialId) => {
