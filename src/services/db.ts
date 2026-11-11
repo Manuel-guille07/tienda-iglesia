@@ -665,22 +665,24 @@ export const insertCloseouts = insertCloseout;
 
 // --- PROFILES (Usuarios en Supabase) ---
 export function toProfileSnake(user: Record<string, any>) {
-  const nameVal = user.name || user.full_name || user.fullName || '';
+  const fullName = user.full_name || user.fullName || user.name || 'Usuario';
+  const avatarVal = user.avatar && typeof user.avatar === 'string' && user.avatar.trim() !== ''
+    ? user.avatar.trim()
+    : null;
+
   const payload: Record<string, any> = {
-    full_name: nameVal,
-    name: nameVal,
+    full_name: fullName,
     pin: String(user.pin || '0000'),
     role: user.role || 'Vendedor',
-    avatar: user.avatar || '👤',
-    email: user.email || '',
     is_active: user.isActive ?? user.is_active ?? true,
+    avatar: avatarVal,
   };
+
   const validId = cleanUUID(user.id);
   if (validId) {
     payload.id = validId;
-  } else if (user.id) {
-    payload.id = user.id;
   }
+
   return payload;
 }
 
@@ -715,15 +717,21 @@ export async function getProfiles() {
 export async function upsertProfile(profile: Record<string, any>) {
   try {
     const payload = toProfileSnake(profile);
-    const { data, error } = await supabase.from('profiles').upsert([payload], { onConflict: 'id' }).select();
+
+    const query = payload.id
+      ? supabase.from('profiles').upsert([payload], { onConflict: 'id' })
+      : supabase.from('profiles').insert([payload]);
+
+    const { data, error } = await query.select();
+
     if (error) {
       console.warn('[Supabase] upsertProfile warning:', error.message);
-      return null;
+      throw error;
     }
     return data && data[0] ? fromProfileSnake(data[0]) : null;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('[Supabase] upsertProfile catch:', err);
-    return null;
+    throw err;
   }
 }
 
