@@ -1,0 +1,17 @@
+{
+  "short_name": "POS Iglesia",
+  "name": "Chiringuito & Cafetería Iglesia POS",
+  "icons": [
+    {
+      "src": "/coffee-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "any",
+  "description": "Sistema de Punto de Venta y Gestión de Cafetería de la Iglesia"
+}
