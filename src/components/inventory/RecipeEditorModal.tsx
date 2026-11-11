@@ -13,7 +13,7 @@ interface Props {
 }
 
 export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product }) => {
-  const { products, rawMaterials, updateProductRecipe } = usePOSStore();
+  const { products, rawMaterials, updateProductRecipe, deleteProductRecipe } = usePOSStore();
   const [selectedId, setSelectedId] = useState('');
   const [items, setItems] = useState<RecipeItem[]>([]);
 
@@ -30,26 +30,38 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
   }, [product, products, isOpen]);
 
   const handleAddItem = () => {
-    if (rawMaterials.length === 0) return toast.error('No hay insumos');
+    if (rawMaterials.length === 0) return toast.error('No hay insumos disponibles');
     const unused = rawMaterials.find((m) => !items.some((it) => it.rawMaterialId === m.id));
     setItems([...items, { rawMaterialId: unused ? unused.id : rawMaterials[0].id, quantity: 1 }]);
   };
 
   const handleSave = () => {
-    if (!selectedId) return toast.error('Selecciona producto');
+    if (!selectedId) return toast.error('Selecciona un producto');
     if (items.length === 0) return toast.error('Agrega al menos un insumo');
     for (const it of items) {
-      if (it.quantity <= 0) return toast.error('Cantidad mayor a 0');
+      if (it.quantity <= 0) return toast.error('La cantidad debe ser mayor a 0');
     }
     updateProductRecipe(selectedId, items);
     toast.success('Receta guardada con éxito');
     onClose();
   };
 
+  const handleDeleteRecipe = async () => {
+    if (!selectedId) return;
+    const current = products.find((p) => p.id === selectedId);
+    if (!current) return;
+
+    if (window.confirm(`¿Estás seguro de eliminar la receta de "${current.name}"?`)) {
+      await deleteProductRecipe(selectedId);
+      toast.success(`Receta de "${current.name}" eliminada correctamente`);
+      onClose();
+    }
+  };
+
   const currentProd = products.find((p) => p.id === selectedId);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={product ? `Editar: ${product.name}` : 'Crear / Editar Receta'}>
+    <Modal isOpen={isOpen} onClose={onClose} title={product ? `Editar Receta: ${product.name}` : 'Crear / Editar Receta'}>
       <div className="space-y-4">
         {!product && (
           <div>
@@ -73,7 +85,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
         )}
 
         {currentProd && (
-          <div className="bg-slate-800/60 p-2 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
+          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
             <span className="font-semibold text-white flex items-center gap-1.5">
               <Coffee className="w-4 h-4 text-amber-400" /> {currentProd.name}
             </span>
@@ -83,13 +95,13 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
 
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <label className="text-xs font-semibold text-slate-300">Ingredientes necesarios:</label>
-            <button type="button" onClick={handleAddItem} className="text-xs text-indigo-400 flex items-center gap-1 cursor-pointer">
+            <label className="text-xs font-semibold text-slate-300">Ingredientes de la Receta:</label>
+            <button type="button" onClick={handleAddItem} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer font-medium">
               <Plus className="w-3.5 h-3.5" /> Añadir Insumo
             </button>
           </div>
 
-          <div className="space-y-2 max-h-56 overflow-y-auto">
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {items.map((item, idx) => {
               const mat = rawMaterials.find((m) => m.id === item.rawMaterialId);
               return (
@@ -128,6 +140,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                     type="button"
                     onClick={() => setItems(items.filter((_, i) => i !== idx))}
                     className="p-1 text-slate-400 hover:text-rose-400 cursor-pointer"
+                    title="Quitar de receta"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -137,7 +150,17 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
           </div>
         </div>
 
-        <div className="flex gap-2 pt-2">
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+          {currentProd?.recipe && (
+            <button
+              type="button"
+              onClick={handleDeleteRecipe}
+              className="px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar Receta</span>
+            </button>
+          )}
           <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
           <Button variant="success" className="flex-1 font-bold" onClick={handleSave}>Guardar Receta</Button>
         </div>

@@ -87,6 +87,7 @@ interface POSState {
   toggleRawMaterialAvailability: (materialId: string) => void;
   updateRawMaterial: (materialId: string, updates: Partial<RawMaterial>) => void;
   updateProductRecipe: (productId: string, recipe: RecipeItem[]) => void;
+  deleteProductRecipe: (productId: string) => Promise<boolean>;
   voidSale: (saleId: string) => Promise<{ success: boolean; error?: string }>;
   handleRealtimeRawMaterial: (material: RawMaterial, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void;
   handleRealtimeSale: (sale: Partial<Sale>, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void;
@@ -439,10 +440,13 @@ export const usePOSStore = create<POSState>((set, get) => ({
               products: buildDynamicProducts(rawWithRealId, state.products),
             };
           });
+        } else {
+          toast.error('Supabase no devolvió la confirmación del nuevo producto');
         }
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error('Error al sincronizar nuevo insumo en Supabase:', error);
+        toast.error(error?.message || 'Error de sincronización con Supabase al crear producto');
       });
 
     return newMaterial;
@@ -482,8 +486,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
     });
 
     if (updatedItem) {
-      insertRawMaterial(updatedItem).catch((error) => {
+      insertRawMaterial(updatedItem).catch((error: any) => {
         console.error('Error al sincronizar disponibilidad de insumo en Supabase:', error);
+        toast.error(error?.message || 'Error de disponibilidad en Supabase');
       });
     }
   },
@@ -506,8 +511,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
     });
 
     if (updatedItem) {
-      insertRawMaterial(updatedItem).catch((error) => {
+      insertRawMaterial(updatedItem).catch((error: any) => {
         console.error('Error al sincronizar actualización de insumo en Supabase:', error);
+        toast.error(error?.message || 'Error al actualizar el producto en Supabase');
       });
     }
   },
@@ -518,6 +524,19 @@ export const usePOSStore = create<POSState>((set, get) => ({
         p.id === productId ? { ...p, recipe } : p
       ),
     });
+  },
+
+  deleteProductRecipe: async (productId: string) => {
+    const { products } = get();
+    const target = products.find((p) => p.id === productId);
+    if (!target) return false;
+
+    set({
+      products: products.map((p) =>
+        p.id === productId ? { ...p, recipe: undefined } : p
+      ),
+    });
+    return true;
   },
 
   voidSale: async (saleId: string) => {

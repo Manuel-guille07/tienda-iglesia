@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { User, Role } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, createSecondarySupabaseClient } from '../lib/supabase';
 import { getProfiles, upsertProfile } from '../services/db';
 
 export function getUserInternalEmail(user: User): string {
@@ -28,7 +28,7 @@ interface AuthState {
   loginWithPin: (pin: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   loginAs: (user: User) => void;
-  saveUserProfile: (userData: Partial<User> & { id: string; name: string; pin: string; role: Role }) => Promise<{ success: boolean; profile?: User }>;
+  saveUserProfile: (userData: Partial<User> & { id: string; name: string; pin: string; role: Role }) => Promise<{ success: boolean; message?: string; profile?: User }>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -220,18 +220,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isActive: userData.isActive ?? true,
     };
 
-    // 1. Guardar en Supabase tabla 'profiles'
-    const saved = await upsertProfile(updatedUser);
-
-    // 2. Intentar registrar el usuario en Supabase Auth con su PIN
+    let saved: User | null = null;
     try {
+      // 1. Guardar en Supabase tabla 'profiles'
+      saved = await upsertProfile(updatedUser);
+    } catch (upsertErr: any) {
+      console.error('[saveUserProfile] Error al guardar perfil en Supabase:', upsertErr);
+      return {
+        success: false,
+        message: upsertErr?.message || 'Error al guardar usuario en la tabla profiles de Supabase',
+      };
+    }
+
+    if (!saved) {
+      return {
+        success: false,
+        message: 'No se pudo confirmar la creación del perfil de usuario en Supabase',
+      };
+    }
+
+    // 2. Intentar registrar el usuario en Supabase Auth mediante cliente secundario aislado sin persistencia de sesión
+    try {
+      const secondaryAuthClient = createSecondarySupabaseClient();
       const internalEmail = updatedUser.email;
-      await supabase.auth.signUp({
+      const { error: authError } = await secondaryAuthClient.auth.signUp({
         email: internalEmail,
         password: updatedUser.pin,
       });
-    } catch (authSignUpErr) {
-      console.info('[saveUserProfile] signUp en Supabase Auth no requerido o ya existente:', authSignUpErr);
+
+      if (authError && !authError.message.toLowerCase().includes('already registered')) {
+        console.warn('[saveUserProfile] Supabase Auth warning:', authError.message);
+      }
+    } catch (authSignUpErr: any) {
+      console.info('[saveUserProfile] Excepción en signUp secundario Supabase Auth:', authSignUpErr);
     }
 
     // 3. Recargar lista de perfiles

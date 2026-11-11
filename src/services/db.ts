@@ -59,6 +59,7 @@ export function toRawMaterialSnake(item: Record<string, any>) {
   const isQuickAccess = typeof item.is_quick_access === 'boolean'
     ? item.is_quick_access
     : (typeof item.isQuickAccess === 'boolean' ? item.isQuickAccess : (item.isPreset ?? false));
+  const priceVal = typeof item.price === 'number' ? item.price : null;
 
   const payload: Record<string, any> = {
     name: item.name,
@@ -70,11 +71,8 @@ export function toRawMaterialSnake(item: Record<string, any>) {
     category: item.category || 'cafeteria',
     is_sellable: isSellable,
     is_quick_access: isQuickAccess,
+    price: priceVal,
   };
-
-  if (typeof item.price === 'number') {
-    payload.price = item.price;
-  }
 
   const validId = cleanUUID(item.id);
   if (validId) {
@@ -352,13 +350,13 @@ export async function insertRawMaterial(material: Record<string, any> | Record<s
     const { data, error } = await query.select();
 
     if (error) {
-      console.warn('[Supabase] insertRawMaterial warning:', error);
-      return null;
+      console.warn('[Supabase] insertRawMaterial warning:', error.message);
+      throw error;
     }
     return (data || []).map(fromRawMaterialSnake);
-  } catch (err) {
+  } catch (err: any) {
     console.warn('[Supabase] insertRawMaterial catch:', err);
-    return null;
+    throw err;
   }
 }
 

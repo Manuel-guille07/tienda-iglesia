@@ -60,11 +60,15 @@ export const UsersManagementScreen: React.FC = () => {
         avatar: editingUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
       };
 
-      await saveUserProfile(userToSave);
+      const result = await saveUserProfile(userToSave);
       toast.dismiss(toastId);
-      toast.success(t('users.saved'));
-      setIsModalOpen(false);
-      setEditingUser(null);
+      if (result.success) {
+        toast.success(t('users.saved'));
+        setIsModalOpen(false);
+        setEditingUser(null);
+      } else {
+        toast.error(result.message || 'Error al guardar el perfil del usuario en Supabase');
+      }
     } catch (err: any) {
       toast.dismiss(toastId);
       toast.error(err?.message || 'Error al guardar el perfil del usuario');

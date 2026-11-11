@@ -67,3 +67,21 @@ function createMockSupabase(): any {
 
 export const isSupabaseConfigured = isConfigured;
 export const supabase = client;
+
+export function createSecondarySupabaseClient(): SupabaseClient | any {
+  if (isConfigured) {
+    try {
+      return createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
+    } catch (err) {
+      console.warn('[Supabase] Error al crear cliente secundario sin persistencia:', err);
+      return createMockSupabase();
+    }
+  }
+  return createMockSupabase();
+}
