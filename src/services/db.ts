@@ -616,10 +616,12 @@ export const insertCloseouts = insertCloseout;
 
 // --- PROFILES (Usuarios en Supabase) ---
 export function toProfileSnake(user: Record<string, any>) {
+  const nameVal = user.name || user.full_name || user.fullName || '';
   const payload: Record<string, any> = {
-    name: user.name,
-    pin: user.pin,
-    role: user.role,
+    full_name: nameVal,
+    name: nameVal,
+    pin: String(user.pin || '0000'),
+    role: user.role || 'Vendedor',
     avatar: user.avatar || '👤',
     email: user.email || '',
     is_active: user.isActive ?? user.is_active ?? true,
@@ -634,10 +636,12 @@ export function toProfileSnake(user: Record<string, any>) {
 }
 
 export function fromProfileSnake(row: Record<string, any>) {
+  const displayName = row.full_name || row.fullName || row.name || row.display_name || row.username || (row.email ? row.email.split('@')[0] : 'Usuario');
   return {
     id: String(row.id),
-    name: row.name || 'Usuario',
-    pin: row.pin || '0000',
+    name: displayName,
+    full_name: displayName,
+    pin: String(row.pin || '0000'),
     role: (row.role || 'Vendedor') as any,
     avatar: row.avatar || '👤',
     email: row.email || '',

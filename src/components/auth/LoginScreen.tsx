@@ -7,7 +7,7 @@ import { Delete, Lock, User as UserIcon, ChevronDown } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
   const { t } = useLanguage();
-  const { users, selectedUserForPin, setSelectedUserForPin, loginWithPin, isLoading, isAuthenticated } = useAuthStore();
+  const { users, selectedUserForPin, setSelectedUserForPin, loginWithPin, isLoading, isLoadingProfiles, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const [pin, setPin] = useState('');
 
@@ -57,21 +57,23 @@ export const LoginScreen: React.FC = () => {
   };
 
   const triggerLogin = async (pinToTest: string) => {
-    const target = selectedUserForPin || users[0];
+    if (!selectedUserForPin) {
+      toast.error('Por favor, selecciona un usuario');
+      return;
+    }
+
     const toastId = toast.loading('Autenticando...');
     const result = await loginWithPin(pinToTest);
     toast.dismiss(toastId);
 
     if (result.success) {
-      toast.success(t('auth.welcome', { name: target?.name || 'Usuario' }));
+      toast.success(t('auth.welcome', { name: selectedUserForPin.name || 'Usuario' }));
       navigate('/pos', { replace: true });
     } else {
       toast.error(result.message || t('auth.incorrectPin'));
       setPin('');
     }
   };
-
-  const currentSelected = selectedUserForPin || users[0];
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 selection:bg-indigo-500 selection:text-white">
@@ -107,28 +109,39 @@ export const LoginScreen: React.FC = () => {
             {t('auth.selectUser')}
           </label>
 
-          <div className="relative">
-            <select
-              value={currentSelected.id}
-              onChange={(e) => {
-                const found = users.find((u) => u.id === e.target.value);
-                if (found) {
-                  setSelectedUserForPin(found);
-                  setPin('');
-                }
-              }}
-              className="w-full px-4 py-3 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-2xl text-sm font-semibold text-white appearance-none transition cursor-pointer shadow-inner"
-            >
-              {users.map((u) => (
-                <option key={u.id} value={u.id} className="bg-slate-900 text-white py-2">
-                  {u.avatar || '👤'} {u.name}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-              <ChevronDown className="w-4 h-4" />
+          {isLoadingProfiles ? (
+            <div className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center gap-2 text-xs text-slate-400">
+              <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+              <span>Cargando perfiles desde Supabase...</span>
             </div>
-          </div>
+          ) : users.length === 0 ? (
+            <div className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-rose-400 text-center">
+              No hay usuarios registrados en la base de datos
+            </div>
+          ) : (
+            <div className="relative">
+              <select
+                value={selectedUserForPin?.id || ''}
+                onChange={(e) => {
+                  const found = users.find((u) => u.id === e.target.value);
+                  if (found) {
+                    setSelectedUserForPin(found);
+                    setPin('');
+                  }
+                }}
+                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-2xl text-sm font-semibold text-white appearance-none transition cursor-pointer shadow-inner"
+              >
+                {users.map((u) => (
+                  <option key={u.id} value={u.id} className="bg-slate-900 text-white py-2">
+                    {u.avatar || '👤'} {u.name} ({u.role})
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* PIN Dots Indicator */}

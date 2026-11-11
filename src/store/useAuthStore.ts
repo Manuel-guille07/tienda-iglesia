@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { User, Role } from '../types';
-import { INITIAL_USERS } from '../data/initialData';
 import { supabase } from '../lib/supabase';
 import { getProfiles, upsertProfile } from '../services/db';
 
@@ -19,6 +18,7 @@ interface AuthState {
   isAuthenticated: boolean;
   selectedUserForPin: User | null;
   isLoading: boolean;
+  isLoadingProfiles: boolean;
   isInitialized: boolean;
 
   // Actions
@@ -32,34 +32,48 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  users: INITIAL_USERS,
-  allProfiles: INITIAL_USERS,
+  users: [],
+  allProfiles: [],
   currentUser: null,
   isAuthenticated: false,
-  selectedUserForPin: INITIAL_USERS[0],
+  selectedUserForPin: null,
   isLoading: false,
+  isLoadingProfiles: false,
   isInitialized: false,
 
   loadProfiles: async () => {
+    set({ isLoadingProfiles: true });
     try {
       const dbProfiles = await getProfiles();
       if (dbProfiles && dbProfiles.length > 0) {
         const activeUsers = dbProfiles.filter((u: User) => u.isActive !== false);
         set({
           allProfiles: dbProfiles,
-          users: activeUsers.length > 0 ? activeUsers : INITIAL_USERS,
+          users: activeUsers,
         });
-        if (!get().selectedUserForPin && dbProfiles[0]) {
-          set({ selectedUserForPin: dbProfiles[0] });
+
+        const currentSel = get().selectedUserForPin;
+        if (!currentSel && activeUsers.length > 0) {
+          set({ selectedUserForPin: activeUsers[0] });
+        } else if (currentSel) {
+          const matched = activeUsers.find((u: User) => u.id === currentSel.id);
+          if (matched) {
+            set({ selectedUserForPin: matched });
+          } else if (activeUsers.length > 0) {
+            set({ selectedUserForPin: activeUsers[0] });
+          }
         }
       } else {
         set({
-          allProfiles: INITIAL_USERS,
-          users: INITIAL_USERS,
+          allProfiles: [],
+          users: [],
+          selectedUserForPin: null,
         });
       }
     } catch (err) {
       console.warn('[useAuthStore] Error cargando perfiles desde Supabase:', err);
+    } finally {
+      set({ isLoadingProfiles: false });
     }
   },
 
@@ -112,39 +126,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setSelectedUserForPin: (user) => set({ selectedUserForPin: user }),
 
   loginWithPin: async (pin: string) => {
-    const { selectedUserForPin, users } = get();
-    const targetUser = selectedUserForPin || users[0];
+    const { selectedUserForPin } = get();
 
-    if (!targetUser) {
-      return { success: false, message: 'No hay usuario seleccionado' };
+    if (!selectedUserForPin) {
+      return { success: false, message: 'Selecciona un usuario de la lista' };
     }
 
     set({ isLoading: true });
 
-    // Verificación del PIN
-    if (targetUser.pin !== pin) {
+    // Verificación estricta del PIN del usuario seleccionado
+    if (selectedUserForPin.pin !== pin) {
       set({ isLoading: false });
       return { success: false, message: 'PIN incorrecto. Inténtalo de nuevo.' };
     }
 
-    // Intento de autenticación en Supabase Auth si corresponde
-    const internalEmail = getUserInternalEmail(targetUser);
+    // Intento opcional de autenticación en Supabase Auth con PIN como contraseña
+    const internalEmail = getUserInternalEmail(selectedUserForPin);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: internalEmail,
         password: pin,
       });
 
       if (error) {
-        console.info(`[Auth Híbrido] Fallback activo para ${internalEmail}:`, error.message);
+        console.info(`[Auth Híbrido] Fallback local activo para ${internalEmail}:`, error.message);
       }
     } catch (authErr) {
       console.info('[Auth Híbrido] Excepción en llamada Supabase Auth, continuando con perfil activo:', authErr);
     }
 
     set({
-      currentUser: targetUser,
+      currentUser: selectedUserForPin,
       isAuthenticated: true,
       isLoading: false,
     });
@@ -173,7 +186,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   saveUserProfile: async (userData) => {
     const updatedUser: User = {
-      id: userData.id,
+      id: userData.id || `usr-${Date.now()}`,
       name: userData.name,
       pin: userData.pin,
       role: userData.role,
@@ -185,15 +198,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // 1. Guardar en Supabase tabla 'profiles'
     const saved = await upsertProfile(updatedUser);
 
-    // 2. Actualizar estado en memoria
-    const currentProfiles = get().allProfiles.filter((p) => p.id !== updatedUser.id);
-    const newAllProfiles = [saved || updatedUser, ...currentProfiles];
-    const newActiveUsers = newAllProfiles.filter((u) => u.isActive !== false);
+    // 2. Intentar registrar el usuario en Supabase Auth con su PIN
+    try {
+      const internalEmail = updatedUser.email;
+      await supabase.auth.signUp({
+        email: internalEmail,
+        password: updatedUser.pin,
+      });
+    } catch (authSignUpErr) {
+      console.info('[saveUserProfile] signUp en Supabase Auth no requerido o ya existente:', authSignUpErr);
+    }
 
-    set({
-      allProfiles: newAllProfiles,
-      users: newActiveUsers,
-    });
+    // 3. Recargar lista de perfiles
+    await get().loadProfiles();
 
     if (get().currentUser?.id === updatedUser.id) {
       set({ currentUser: saved || updatedUser });

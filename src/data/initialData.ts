@@ -1,43 +1,6 @@
 import { User, RawMaterial, Product, CustomerTab } from '../types';
 
-export const INITIAL_USERS: User[] = [
-  {
-    id: 'user-admin',
-    name: 'Admin ELARX',
-    pin: '0000',
-    role: 'super_admin',
-    avatar: '👑',
-    email: 'admin@tienda.local',
-    isActive: true
-  },
-  {
-    id: 'user-1',
-    name: 'Hermano Carlos',
-    pin: '1234',
-    role: 'Vendedor',
-    avatar: '👨‍💼',
-    email: 'carlos@iglesia.org',
-    isActive: true
-  },
-  {
-    id: 'user-2',
-    name: 'Hermana María',
-    pin: '5678',
-    role: 'Tesorería',
-    avatar: '👩‍💼',
-    email: 'tesoreria@iglesia.org',
-    isActive: true
-  },
-  {
-    id: 'user-3',
-    name: 'Pastor David',
-    pin: '9999',
-    role: 'Pastor',
-    avatar: '🧔',
-    email: 'pastor@iglesia.org',
-    isActive: true
-  }
-];
+export const INITIAL_USERS: User[] = [];
 
 export const INITIAL_RAW_MATERIALS: RawMaterial[] = [
   {
