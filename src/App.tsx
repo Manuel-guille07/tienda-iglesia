@@ -1,14 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { AppLayout } from './components/layout/AppLayout';
 import { POSScreen } from './components/pos/POSScreen';
-import { DashboardScreen } from './components/dashboard/DashboardScreen';
 import { InventoryScreen } from './components/inventory/InventoryScreen';
 import { TabsScreen } from './components/tabs/TabsScreen';
-import { CloseoutScreen } from './components/closeout/CloseoutScreen';
-import { SalesHistoryScreen } from './components/history/SalesHistoryScreen';
-import { UsersManagementScreen } from './components/users/UsersManagementScreen';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { NotFound404 } from './components/common/NotFound404';
 import { useAuthStore } from './store/useAuthStore';
@@ -17,6 +13,35 @@ import { useTabStore } from './store/useTabStore';
 import { useCloseoutStore } from './store/useCloseoutStore';
 import { setupRealtimeSync } from './services/realtime';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+
+// Code-Splitting de rutas secundarias pesadas para optimizar carga inicial en móviles antiguos
+const DashboardScreen = lazy(() =>
+  import('./components/dashboard/DashboardScreen').then((m) => ({
+    default: m.DashboardScreen,
+  }))
+);
+const CloseoutScreen = lazy(() =>
+  import('./components/closeout/CloseoutScreen').then((m) => ({
+    default: m.CloseoutScreen,
+  }))
+);
+const SalesHistoryScreen = lazy(() =>
+  import('./components/history/SalesHistoryScreen').then((m) => ({
+    default: m.SalesHistoryScreen,
+  }))
+);
+const UsersManagementScreen = lazy(() =>
+  import('./components/users/UsersManagementScreen').then((m) => ({
+    default: m.UsersManagementScreen,
+  }))
+);
+
+const RouteLoadingFallback: React.FC = () => (
+  <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 text-slate-400">
+    <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+    <span className="text-xs font-medium">Cargando vista...</span>
+  </div>
+);
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -42,8 +67,12 @@ const App: React.FC = () => {
       onProfileChange: () => {
         useAuthStore.getState().loadProfiles();
       },
-      onCloseoutChange: () => {
-        useCloseoutStore.getState().loadCloseouts();
+      onCloseoutChange: (payload) => {
+        if (payload?.table === 'closeouts') {
+          useCloseoutStore.getState().handleRealtimeCloseout(payload);
+        } else {
+          useCloseoutStore.getState().loadCloseouts();
+        }
       },
     });
 
@@ -55,71 +84,73 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <Routes>
-          {/* Ruta pública de Login */}
-          <Route path="/" element={<LoginScreen />} />
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Routes>
+            {/* Ruta pública de Login */}
+            <Route path="/" element={<LoginScreen />} />
 
-          {/* Rutas protegidas con AppLayout */}
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            {/* POS Terminal */}
-            <Route path="/pos" element={<POSScreen />} />
-
-            {/* Dashboard Estadístico (RBAC: Pastor, Tesorería, super_admin) */}
+            {/* Rutas protegidas con AppLayout */}
             <Route
-              path="/dashboard"
               element={
-                <ProtectedRoute allowedRoles={['Pastor', 'Tesorería', 'super_admin']}>
-                  <DashboardScreen />
+                <ProtectedRoute>
+                  <AppLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              {/* POS Terminal (Carga inmediata sin lazy loading) */}
+              <Route path="/pos" element={<POSScreen />} />
 
-            {/* Historial de Ventas & Anulación */}
-            <Route path="/historial" element={<SalesHistoryScreen />} />
+              {/* Dashboard Estadístico (RBAC: Pastor, Tesorería, super_admin) */}
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute allowedRoles={['Pastor', 'Tesorería', 'super_admin']}>
+                    <DashboardScreen />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Inventario Compuesto (RBAC: Tesorería y Pastor) */}
-            <Route
-              path="/inventory"
-              element={
-                <ProtectedRoute allowedRoles={['Tesorería', 'Pastor']}>
-                  <InventoryScreen />
-                </ProtectedRoute>
-              }
-            />
+              {/* Historial de Ventas & Anulación */}
+              <Route path="/historial" element={<SalesHistoryScreen />} />
 
-            {/* Fiados & Cuentas */}
-            <Route path="/tabs" element={<TabsScreen />} />
+              {/* Inventario Compuesto (RBAC: Tesorería y Pastor) */}
+              <Route
+                path="/inventory"
+                element={
+                  <ProtectedRoute allowedRoles={['Tesorería', 'Pastor']}>
+                    <InventoryScreen />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Cierre de Caja (RBAC: Vendedor, Tesorería, Pastor) */}
-            <Route
-              path="/closeout"
-              element={
-                <ProtectedRoute allowedRoles={['Vendedor', 'Tesorería', 'Pastor']}>
-                  <CloseoutScreen />
-                </ProtectedRoute>
-              }
-            />
+              {/* Fiados & Cuentas */}
+              <Route path="/tabs" element={<TabsScreen />} />
 
-            {/* Gestión de Usuarios (RBAC: super_admin) */}
-            <Route
-              path="/usuarios"
-              element={
-                <ProtectedRoute allowedRoles={['super_admin']}>
-                  <UsersManagementScreen />
-                </ProtectedRoute>
-              }
-            />
-          </Route>
+              {/* Cierre de Caja (RBAC: Vendedor, Tesorería, Pastor) */}
+              <Route
+                path="/closeout"
+                element={
+                  <ProtectedRoute allowedRoles={['Vendedor', 'Tesorería', 'Pastor']}>
+                    <CloseoutScreen />
+                  </ProtectedRoute>
+                }
+              />
 
-          {/* Ruta Catch-all 404 con diseño ELARX */}
-          <Route path="*" element={<NotFound404 />} />
-        </Routes>
+              {/* Gestión de Usuarios (RBAC: super_admin) */}
+              <Route
+                path="/usuarios"
+                element={
+                  <ProtectedRoute allowedRoles={['super_admin']}>
+                    <UsersManagementScreen />
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
+
+            {/* Ruta Catch-all 404 con diseño ELARX */}
+            <Route path="*" element={<NotFound404 />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </ErrorBoundary>
   );

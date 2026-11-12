@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Incident, ShiftClose, Role, Sale, VoidAuditRecord } from '../types';
-import { getCloseouts, insertCloseout, getAuditLogs, insertAuditLog } from '../services/db';
+import { getCloseouts, insertCloseout, getAuditLogs, insertAuditLog, fromCloseoutSnake } from '../services/db';
+import toast from 'react-hot-toast';
 
 export interface TabPaymentExport {
   customerName: string;
@@ -21,6 +22,7 @@ interface CloseoutState {
   addIncident: (text: string, category: Incident['category'], author: string, role: Role) => Incident;
   addVoidAudit: (record: Omit<VoidAuditRecord, 'id'>) => VoidAuditRecord;
   recordShiftClose: (closeData: Omit<ShiftClose, 'id' | 'timestamp' | 'exportStatus'>) => ShiftClose;
+  handleRealtimeCloseout: (payload: any) => void;
   exportToGoogleSheets: (shiftCloseId: string) => Promise<{ success: boolean; message: string }>;
   downloadCSV: (shiftClose: ShiftClose, sales: Sale[], tabPayments?: TabPaymentExport[]) => void;
 }
@@ -43,29 +45,38 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
       let shiftCloses: ShiftClose[] = [];
 
       if (closeoutsData && closeoutsData.length > 0) {
-        latestTimestamp = closeoutsData[0].timestamp || closeoutsData[0].created_at || null;
-        shiftCloses = closeoutsData.map((c: any) => ({
+        const sortedCloseouts = [...closeoutsData].sort(
+          (a: any, b: any) =>
+            new Date(b.timestamp || b.created_at || 0).getTime() -
+            new Date(a.timestamp || a.created_at || 0).getTime()
+        );
+        latestTimestamp = sortedCloseouts[0].timestamp || sortedCloseouts[0].created_at || null;
+        shiftCloses = sortedCloseouts.map((c: any) => ({
           id: c.id,
           timestamp: c.created_at || c.timestamp || new Date().toISOString(),
-          closedBy: c.closed_by_user || 'Usuario',
-          role: (c.closed_by_role as Role) || 'Vendedor',
-          expectedCash: c.expected_cash || 0,
-          actualCash: c.counted_cash || 0,
-          totalCard: c.card_total || 0,
-          totalFiados: c.tabs_total || 0,
-          totalDonativos: c.donations_total || 0,
-          totalConsumoInterno: c.consumption_total || 0,
-          totalCoffeesSold: c.coffees_count || 0,
-          totalSalesCount: c.sales_count || 0,
-          totalRevenue: c.revenue_total || 0,
-          difference: c.discrepancy || 0,
+          closedBy: c.closed_by_user || c.closedBy || 'Usuario',
+          role: (c.closed_by_role || c.role || 'Vendedor') as Role,
+          expectedCash: Number(c.expected_cash ?? c.expectedCash ?? 0),
+          actualCash: Number(c.counted_cash ?? c.actualCash ?? 0),
+          totalCard: Number(c.card_total ?? c.totalCard ?? 0),
+          totalFiados: Number(c.tabs_total ?? c.totalFiados ?? 0),
+          totalDonativos: Number(c.donations_total ?? c.totalDonativos ?? 0),
+          totalConsumoInterno: Number(c.consumption_total ?? c.totalConsumoInterno ?? 0),
+          totalCoffeesSold: Number(c.coffees_count ?? c.totalCoffeesSold ?? 0),
+          totalSalesCount: Number(c.sales_count ?? c.totalSalesCount ?? 0),
+          totalRevenue: Number(
+            c.revenue_total ??
+              c.totalRevenue ??
+              Number(c.expected_cash ?? 0) + Number(c.card_total ?? 0)
+          ),
+          difference: Number(c.discrepancy ?? c.difference ?? 0),
           notes: c.notes || '',
           incidents: [],
           exportStatus: 'synced',
-          salesCash: c.sales_cash || 0,
-          tabPaymentsCash: c.tabs_cash || 0,
-          salesCard: c.sales_card || 0,
-          tabPaymentsCard: c.tabs_card || 0,
+          salesCash: Number(c.sales_cash ?? c.salesCash ?? 0),
+          tabPaymentsCash: Number(c.tabs_cash ?? c.tabPaymentsCash ?? 0),
+          salesCard: Number(c.sales_card ?? c.salesCard ?? 0),
+          tabPaymentsCard: Number(c.tabs_card ?? c.tabPaymentsCard ?? 0),
         }));
       }
 
@@ -78,32 +89,41 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
             const details = log.details || {};
             voidAudits.push({
               id: log.id,
-              saleId: details.saleId || '',
+              saleId: log.saleId || details.saleId || '',
               voidedBy: log.user_name || details.voidedBy || 'Usuario',
               voidedByRole: log.user_role || details.voidedByRole || 'Vendedor',
-              timestamp: log.created_at || details.timestamp || new Date().toISOString(),
-              reason: details.reason || '',
-              returnedItems: details.returnedItems || [],
-              returnedAmount: details.returnedAmount || 0,
-              paymentMethod: details.paymentMethod || 'efectivo',
+              timestamp: log.timestamp || log.created_at || details.timestamp || new Date().toISOString(),
+              reason: log.reason || details.reason || '',
+              returnedItems: log.returnedItems || details.returnedItems || [],
+              returnedAmount: Number(log.returnedAmount ?? details.returnedAmount ?? 0),
+              paymentMethod: log.paymentMethod || details.paymentMethod || 'efectivo',
             });
           } else if (log.action_type === 'incident') {
             const details = log.details || {};
             incidents.push({
               id: log.id,
-              timestamp: log.created_at || new Date().toISOString(),
+              timestamp: log.timestamp || log.created_at || new Date().toISOString(),
               author: log.user_name || 'Usuario',
               role: (log.user_role as Role) || 'Vendedor',
-              text: details.text || '',
-              category: details.category || 'caja',
+              text: log.reason || details.text || '',
+              category: log.category || details.category || 'caja',
             });
           }
         });
       }
 
+      // Conservar el timestamp más reciente para garantizar que el turno quede en 0 €
+      const currentLast = get().lastCloseTimestamp;
+      const effectiveLatest =
+        currentLast && latestTimestamp
+          ? new Date(currentLast).getTime() > new Date(latestTimestamp).getTime()
+            ? currentLast
+            : latestTimestamp
+          : latestTimestamp || currentLast;
+
       set({
         shiftCloses,
-        lastCloseTimestamp: latestTimestamp,
+        lastCloseTimestamp: effectiveLatest,
         voidAudits,
         incidents,
       });
@@ -130,6 +150,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
       details: { text, category },
     }).catch((error) => {
       console.error('Error al guardar incidencia en audit_logs de Supabase:', error);
+      toast.error('No se pudo sincronizar la incidencia con Supabase');
     });
 
     return newIncident;
@@ -166,9 +187,10 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
 
   recordShiftClose: (closeData) => {
     const timestamp = new Date().toISOString();
+    const tempId = `close-${Date.now()}`;
     const newClose: ShiftClose = {
       ...closeData,
-      id: `close-${Date.now()}`,
+      id: tempId,
       timestamp,
       exportStatus: 'pending',
     };
@@ -187,11 +209,88 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
       tabs_cash: closeData.tabPaymentsCash ?? 0,
       tabs_card: closeData.tabPaymentsCard ?? 0,
       discrepancy: closeData.difference,
-    }).catch((error) => {
-      console.error('Error al registrar cierre de caja en Supabase:', error);
-    });
+    })
+      .then((savedRows) => {
+        if (savedRows && savedRows[0]) {
+          const saved = savedRows[0];
+          const serverTs = saved.timestamp || timestamp;
+          const effectiveTs =
+            new Date(serverTs).getTime() > new Date(timestamp).getTime() ? serverTs : timestamp;
+
+          set((state) => ({
+            shiftCloses: state.shiftCloses.map((c) =>
+              c.id === tempId
+                ? {
+                    ...c,
+                    id: String(saved.id),
+                    timestamp: effectiveTs,
+                    exportStatus: 'synced',
+                  }
+                : c
+            ),
+            lastCloseTimestamp: effectiveTs,
+          }));
+        }
+      })
+      .catch((error) => {
+        console.error('Error al registrar cierre de caja en Supabase:', error);
+        toast.error('Error al sincronizar el cierre de caja con Supabase');
+      });
 
     return newClose;
+  },
+
+  handleRealtimeCloseout: (payload: any) => {
+    if (payload?.eventType === 'INSERT' && payload.new) {
+      const mapped = fromCloseoutSnake(payload.new);
+      const currentCloses = get().shiftCloses;
+      const alreadyExists = currentCloses.some(
+        (c) =>
+          c.id === mapped.id ||
+          Math.abs(new Date(c.timestamp).getTime() - new Date(mapped.timestamp).getTime()) < 3000
+      );
+
+      const newTimestamp =
+        new Date(mapped.timestamp).getTime() > Date.now()
+          ? mapped.timestamp
+          : new Date().toISOString();
+
+      if (!alreadyExists) {
+        const remoteShiftClose: ShiftClose = {
+          id: mapped.id,
+          timestamp: newTimestamp,
+          closedBy: mapped.closedBy || 'Compañero',
+          role: (mapped.role as Role) || 'Vendedor',
+          expectedCash: mapped.expectedCash,
+          actualCash: mapped.actualCash,
+          totalCard: mapped.totalCard,
+          totalFiados: 0,
+          totalDonativos: 0,
+          totalConsumoInterno: 0,
+          totalCoffeesSold: 0,
+          totalSalesCount: 0,
+          totalRevenue: mapped.expectedCash + mapped.totalCard,
+          difference: mapped.difference,
+          incidents: [],
+          exportStatus: 'synced',
+          tabPaymentsCash: mapped.tabPaymentsCash,
+          tabPaymentsCard: mapped.tabPaymentsCard,
+        };
+
+        set({
+          shiftCloses: [remoteShiftClose, ...currentCloses],
+          lastCloseTimestamp: newTimestamp,
+        });
+
+        toast.success(
+          `Caja cerrada por ${remoteShiftClose.closedBy}. Turno reiniciado a 0.00€`
+        );
+      } else {
+        set({ lastCloseTimestamp: newTimestamp });
+      }
+    } else {
+      get().loadCloseouts();
+    }
   },
 
   exportToGoogleSheets: async (shiftCloseId) => {

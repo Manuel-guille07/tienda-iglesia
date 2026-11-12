@@ -176,6 +176,9 @@ export const esDict = {
   'closeout.exportCSV': 'Descargar Reporte CSV',
   'closeout.syncSuccess': '¡Datos sincronizados correctamente con Google Sheets!',
   'closeout.confirmClose': 'Finalizar y Cerrar Turno',
+  'closeout.sharedDrawer': 'Caja Única Compartida (Todos los vendedores del turno)',
+  'closeout.sellersInShift': 'Vendedores activos en este arqueo',
+  'toast.remoteShiftClosed': 'Caja cerrada por {user}. Turno reiniciado a 0.00€',
 
   // Toast Messages
   'toast.itemAdded': 'Producto añadido al carrito',
@@ -352,6 +355,9 @@ export const enDict: Record<keyof typeof esDict, string> = {
   'closeout.exportCSV': 'Download CSV Report',
   'closeout.syncSuccess': 'Data synced successfully to Google Sheets!',
   'closeout.confirmClose': 'Finalize & Close Shift',
+  'closeout.sharedDrawer': 'Single Shared Cash Register (All shift sellers)',
+  'closeout.sellersInShift': 'Active sellers in this closeout',
+  'toast.remoteShiftClosed': 'Cash register closed by {user}. Shift reset to 0.00€',
 
   // Toast Messages
   'toast.itemAdded': 'Product added to cart',

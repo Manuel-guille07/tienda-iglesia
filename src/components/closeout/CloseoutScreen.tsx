@@ -46,21 +46,23 @@ export const CloseoutScreen: React.FC = () => {
       }))
   );
 
-  // 1. Obtener fecha del último cierre registrado (ordenado por created_at desc)
+  // 1. Obtener la fecha más reciente del último cierre registrado en Supabase / Estado global
   const lastClose = shiftCloses[0];
-  const effectiveCloseTs = lastClose?.timestamp || lastCloseTimestamp;
-  const lastCloseDate = effectiveCloseTs ? new Date(effectiveCloseTs) : null;
+  const latestCloseMs = Math.max(
+    lastClose?.timestamp ? new Date(lastClose.timestamp).getTime() : 0,
+    lastCloseTimestamp ? new Date(lastCloseTimestamp).getTime() : 0
+  );
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  // 2. Filtro estricto: solo ventas con timestamp POSTERIOR al último cierre (o del día de hoy si no hay cierres)
+  // 2. Caja Única Compartida: Suma TODAS las ventas posteriores al último cierre (sin filtrar por vendedor)
   const isAfterLastCloseout = (isoString?: string) => {
     if (!isoString) return false;
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return false;
-    if (lastCloseDate && !isNaN(lastCloseDate.getTime())) {
-      return d.getTime() > lastCloseDate.getTime();
+    if (latestCloseMs > 0) {
+      return d.getTime() > latestCloseMs;
     }
     return d.getTime() >= startOfDay.getTime();
   };
@@ -68,7 +70,19 @@ export const CloseoutScreen: React.FC = () => {
   const shiftSales = sales.filter((s) => isAfterLastCloseout(s.timestamp));
   const shiftTabPayments = allTabPayments.filter((p) => isAfterLastCloseout(p.timestamp));
 
-  // Ventas del turno actual
+  // Resumen de vendedores que han cobrado en esta Caja Única durante el turno activo
+  const sellersInShift = Array.from(
+    shiftSales.reduce((map, s) => {
+      const seller = s.sellerName || 'Vendedor';
+      const current = map.get(seller) || { count: 0, total: 0 };
+      current.count += 1;
+      current.total += s.total || 0;
+      map.set(seller, current);
+      return map;
+    }, new Map<string, { count: number; total: number }>())
+  );
+
+  // Ventas globales del turno actual (todos los vendedores)
   const salesCash = Number(
     shiftSales.filter((s) => s.paymentMethod === 'efectivo').reduce((a, s) => a + s.total, 0).toFixed(2)
   );
@@ -90,7 +104,7 @@ export const CloseoutScreen: React.FC = () => {
       .toFixed(2)
   );
 
-  // TOTALES ESPERADOS INCLUYENDO ABONOS DE FIADOS DEL TURNO ACTUAL
+  // TOTALES ESPERADOS EN LA CAJA FÍSICA COMPARTIDA
   const expectedCash = Number((salesCash + tabPaymentsCash).toFixed(2));
   const totalCard = Number((salesCard + tabPaymentsCard).toFixed(2));
   const totalFiados = Number(shiftSales.filter((s) => s.paymentMethod === 'fiado').reduce((a, s) => a + s.total, 0).toFixed(2));
@@ -135,7 +149,8 @@ export const CloseoutScreen: React.FC = () => {
             {t('closeout.title')}
           </h2>
           <p className="text-xs text-slate-400">
-            {t('closeout.subtitle')} • Turno por: <strong className="text-white">{currentUser?.name}</strong> ({currentUser?.role})
+            {t('closeout.sharedDrawer')} · Arqueo ejecutado por:{' '}
+            <strong className="text-white">{currentUser?.name}</strong> ({currentUser?.role})
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -177,6 +192,22 @@ export const CloseoutScreen: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Información de Vendedores en la Caja Única Compartida */}
+      {sellersInShift.length > 0 && (
+        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-slate-400 font-medium">
+            {t('closeout.sellersInShift')} ({shiftSales.length} tickets globales):
+          </span>
+          <div className="flex flex-wrap items-center gap-3 font-mono tabular-nums">
+            {sellersInShift.map(([seller, info]) => (
+              <span key={seller} className="text-slate-200">
+                <strong className="text-indigo-300 font-sans">{seller}</strong>: {info.count} vta ({info.total.toFixed(2)}€)
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {shiftVoidAudits.length > 0 && (
         <div className="bg-rose-500/10 border border-rose-500/25 p-3 rounded-2xl flex items-center justify-between text-xs text-rose-300">

@@ -7,7 +7,7 @@ export interface RealtimeCallbacks {
   onSaleChange?: (sale: Partial<Sale>, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void;
   onTabChange?: () => void;
   onProfileChange?: () => void;
-  onCloseoutChange?: () => void;
+  onCloseoutChange?: (payload?: any) => void;
 }
 
 let activeChannel: ReturnType<typeof supabase.channel> | null = null;
@@ -86,8 +86,8 @@ export function setupRealtimeSync(callbacks: RealtimeCallbacks) {
     .on(
       'postgres_changes' as any,
       { event: '*', schema: 'public', table: 'closeouts' },
-      () => {
-        callbacks.onCloseoutChange?.();
+      (payload: any) => {
+        callbacks.onCloseoutChange?.(payload);
       }
     )
     .on(
