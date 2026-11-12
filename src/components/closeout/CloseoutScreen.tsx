@@ -5,7 +5,17 @@ import { useTabStore } from '../../store/useTabStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
-import { Calculator, FileSpreadsheet, Download, Printer } from 'lucide-react';
+import {
+  Calculator,
+  FileSpreadsheet,
+  Download,
+  Printer,
+  Banknote,
+  CreditCard,
+  BookOpen,
+  Heart,
+  Coffee,
+} from 'lucide-react';
 import { Button } from '../ui/Button';
 import { IncidentModal } from './IncidentModal';
 import { IncidentListPanel } from './IncidentListPanel';
@@ -233,42 +243,146 @@ export const CloseoutScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Tarjetas KPI de Turno */}
+      {/* Tarjetas KPI de Turno con Color Semántico Sutil Quiet Luxury */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
-          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-            Efectivo Esperado
+        {/* 1. Efectivo (Cash): Tinte Verde Salvia / Esmeralda */}
+        <div
+          className={`p-4 rounded-3xl border transition-colors ${
+            isDark
+              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-100'
+              : 'bg-emerald-500/12 border-emerald-600/25 text-emerald-950'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`text-xs font-semibold ${
+                isDark ? 'text-emerald-200' : 'text-emerald-900'
+              }`}
+            >
+              Efectivo Esperado
+            </span>
+            <Banknote
+              className={`w-4 h-4 shrink-0 ${
+                isDark ? 'text-emerald-300' : 'text-emerald-800'
+              }`}
+            />
+          </div>
+          <span className="text-2xl font-bold tabular-nums block mt-1.5">
+            {expectedCash.toFixed(2)} €
           </span>
-          <span className="text-2xl font-bold tabular-nums block mt-1">{expectedCash.toFixed(2)} €</span>
           {tabPaymentsCash > 0 && (
-            <span className={`text-xs block mt-1 truncate ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            <span
+              className={`text-xs block mt-1 truncate ${
+                isDark ? 'text-emerald-200/80' : 'text-emerald-900/80'
+              }`}
+            >
               Vtas: {salesCash.toFixed(2)} € · Abonos: +{tabPaymentsCash.toFixed(2)} €
             </span>
           )}
         </div>
-        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
-          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-            Datáfono Total
+
+        {/* 2. Datáfono (Card): Tinte Azul Pizarra / Índigo */}
+        <div
+          className={`p-4 rounded-3xl border transition-colors ${
+            isDark
+              ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-100'
+              : 'bg-indigo-500/12 border-indigo-600/25 text-indigo-950'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`text-xs font-semibold ${
+                isDark ? 'text-indigo-200' : 'text-indigo-900'
+              }`}
+            >
+              Datáfono Total
+            </span>
+            <CreditCard
+              className={`w-4 h-4 shrink-0 ${
+                isDark ? 'text-indigo-300' : 'text-indigo-800'
+              }`}
+            />
+          </div>
+          <span className="text-2xl font-bold tabular-nums block mt-1.5">
+            {totalCard.toFixed(2)} €
           </span>
-          <span className="text-2xl font-bold tabular-nums block mt-1">{totalCard.toFixed(2)} €</span>
         </div>
-        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
-          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-            Nuevos Fiados
+
+        {/* 3. Fiado (Tab): Tinte Ámbar / Naranja quemado */}
+        <div
+          className={`p-4 rounded-3xl border transition-colors ${
+            isDark
+              ? 'bg-amber-500/15 border-amber-500/30 text-amber-100'
+              : 'bg-amber-500/12 border-amber-600/25 text-amber-950'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`text-xs font-semibold ${
+                isDark ? 'text-amber-200' : 'text-amber-900'
+              }`}
+            >
+              Nuevos Fiados
+            </span>
+            <BookOpen
+              className={`w-4 h-4 shrink-0 ${
+                isDark ? 'text-amber-300' : 'text-amber-800'
+              }`}
+            />
+          </div>
+          <span className="text-2xl font-bold tabular-nums block mt-1.5">
+            {totalFiados.toFixed(2)} €
           </span>
-          <span className="text-2xl font-bold tabular-nums block mt-1">{totalFiados.toFixed(2)} €</span>
         </div>
-        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
-          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-            Donativos
+
+        {/* 4. Donativo: Tinte Malva / Púrpura */}
+        <div
+          className={`p-4 rounded-3xl border transition-colors ${
+            isDark
+              ? 'bg-purple-500/15 border-purple-500/30 text-purple-100'
+              : 'bg-purple-500/12 border-purple-600/25 text-purple-950'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`text-xs font-semibold ${
+                isDark ? 'text-purple-200' : 'text-purple-900'
+              }`}
+            >
+              Donativos
+            </span>
+            <Heart
+              className={`w-4 h-4 shrink-0 ${
+                isDark ? 'text-purple-300' : 'text-purple-800'
+              }`}
+            />
+          </div>
+          <span className="text-2xl font-bold tabular-nums block mt-1.5">
+            {totalDonativos.toFixed(2)} €
           </span>
-          <span className="text-2xl font-bold tabular-nums block mt-1">{totalDonativos.toFixed(2)} €</span>
         </div>
-        <div className={`p-4 rounded-3xl border col-span-2 sm:col-span-1 ${cardSurface}`}>
-          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-            Cafés Servidos
+
+        {/* 5. Métrica Neutra (Cafés Servidos): Tinte Neutral Quiet Luxury (Piedra / Espresso) */}
+        <div
+          className={`p-4 rounded-3xl border col-span-2 sm:col-span-1 transition-colors ${cardSurface}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`text-xs font-semibold ${
+                isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+              }`}
+            >
+              Cafés Servidos
+            </span>
+            <Coffee
+              className={`w-4 h-4 shrink-0 ${
+                isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+              }`}
+            />
+          </div>
+          <span className="text-2xl font-bold tabular-nums block mt-1.5">
+            {totalCoffees}
           </span>
-          <span className="text-2xl font-bold tabular-nums block mt-1">{totalCoffees}</span>
         </div>
       </div>
 

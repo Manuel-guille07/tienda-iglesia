@@ -102,6 +102,8 @@ export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts:
       ? mat.isQuickAccess
       : (existing?.isQuickAccess !== undefined ? existing.isQuickAccess : false);
 
+    const quickColor = mat.quickColor || mat.quick_color || existing?.quickColor || existing?.quick_color || 'default';
+
     return {
       id: mat.id,
       name: mat.name,
@@ -112,6 +114,8 @@ export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts:
       isQuickAccess,
       isSellable,
       color: existing?.color || colors[idx % colors.length],
+      quickColor,
+      quick_color: quickColor,
       badge: mat.isOutOfStock || mat.currentStock <= 0 ? 'Agotado' : (mat.currentStock <= mat.minStock ? 'Bajo' : undefined),
       recipe: existing?.recipe || [
         { rawMaterialId: mat.id, quantity: 1 },
@@ -199,6 +203,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
         isSellable: item.isSellable ?? item.is_sellable ?? true,
         isQuickAccess: item.isQuickAccess ?? item.is_quick_access ?? false,
         price: typeof item.price === 'number' ? item.price : undefined,
+        quickColor: item.quickColor ?? item.quick_color ?? 'default',
+        quick_color: item.quick_color ?? item.quickColor ?? 'default',
       }));
 
       const products = buildDynamicProducts(rawMaterials, get().products);
@@ -230,6 +236,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
         isSellable: item.isSellable ?? item.is_sellable ?? true,
         isQuickAccess: item.isQuickAccess ?? item.is_quick_access ?? false,
         price: typeof item.price === 'number' ? item.price : undefined,
+        quickColor: item.quickColor ?? item.quick_color ?? 'default',
+        quick_color: item.quick_color ?? item.quickColor ?? 'default',
       }));
 
       const products = buildDynamicProducts(rawMaterials, get().products);

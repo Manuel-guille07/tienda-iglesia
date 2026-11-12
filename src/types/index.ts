@@ -12,6 +12,8 @@ export interface User {
 
 export type Category = 'cafeteria' | 'bebidas' | 'snacks' | 'donativos' | 'merchandising' | 'insumos';
 
+export type QuickColor = 'default' | 'sage' | 'slate' | 'terracotta' | 'amber' | 'mauve';
+
 export interface RawMaterial {
   id: string;
   name: string;
@@ -24,6 +26,8 @@ export interface RawMaterial {
   isSellable?: boolean;
   isQuickAccess?: boolean;
   price?: number;
+  quickColor?: QuickColor;
+  quick_color?: QuickColor;
 }
 
 export interface RecipeItem {
@@ -45,6 +49,8 @@ export interface Product {
   minDirectStock?: number;
   badge?: string;
   color?: string; // Color tag for UI button
+  quickColor?: QuickColor;
+  quick_color?: QuickColor;
 }
 
 export interface CartItem {

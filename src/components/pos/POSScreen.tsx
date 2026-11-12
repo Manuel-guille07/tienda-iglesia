@@ -5,7 +5,7 @@ import { CartPanel } from './CartPanel';
 import { PaymentModal } from './PaymentModal';
 import { usePOSStore } from '../../store/usePOSStore';
 import { useTheme } from '../../context/ThemeContext';
-import { ArrowRight, X, Zap, Package } from 'lucide-react';
+import { ArrowRight, X, Zap, LayoutGrid } from 'lucide-react';
 
 export const POSScreen: React.FC = () => {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
@@ -23,7 +23,7 @@ export const POSScreen: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Área Principal del Mostrador POS (8 cols en lg) */}
         <div className="lg:col-span-8 space-y-4 min-w-0">
-          {/* Selector Tipo Píldora Quiet Luxury: ⚡ Botones Rápidos | 📦 Catálogo Completo */}
+          {/* Selector Tipo Píldora Quiet Luxury con Iconos Vectoriales Limpios (Cero Emojis) */}
           <div
             className={`p-1.5 rounded-full border grid grid-cols-2 gap-1.5 ${
               isDark
@@ -44,8 +44,8 @@ export const POSScreen: React.FC = () => {
                   : 'text-[#6E665E] hover:text-[#141210]'
               }`}
             >
-              <Zap className="w-4 h-4 shrink-0" />
-              <span className="truncate">⚡ Botones Rápidos</span>
+              <Zap size={18} className="shrink-0" />
+              <span className="truncate">Botones Rápidos</span>
             </button>
 
             <button
@@ -61,8 +61,8 @@ export const POSScreen: React.FC = () => {
                   : 'text-[#6E665E] hover:text-[#141210]'
               }`}
             >
-              <Package className="w-4 h-4 shrink-0" />
-              <span className="truncate">📦 Catálogo Completo</span>
+              <LayoutGrid size={18} className="shrink-0" />
+              <span className="truncate">Catálogo Completo</span>
             </button>
           </div>
 

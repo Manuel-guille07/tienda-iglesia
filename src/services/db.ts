@@ -48,7 +48,15 @@ export function generateUUID(): string {
 // ============================================================================
 
 // 1. RAW MATERIALS
-// Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available, category, is_sellable, is_quick_access, price
+// Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available, category, is_sellable, is_quick_access, price, quick_color
+const VALID_QUICK_COLORS = ['default', 'sage', 'slate', 'terracotta', 'amber', 'mauve'];
+
+export function sanitizeQuickColor(raw?: any): string {
+  if (!raw || typeof raw !== 'string') return 'default';
+  const cleaned = raw.trim().toLowerCase();
+  return VALID_QUICK_COLORS.includes(cleaned) ? cleaned : 'default';
+}
+
 export function toRawMaterialSnake(item: Record<string, any>) {
   const isOutOfStock = Boolean(item.isOutOfStock ?? item.is_out_of_stock ?? false);
   const isAvailable = typeof item.is_available === 'boolean' ? item.is_available : !isOutOfStock;
@@ -60,6 +68,7 @@ export function toRawMaterialSnake(item: Record<string, any>) {
     ? item.is_quick_access
     : (typeof item.isQuickAccess === 'boolean' ? item.isQuickAccess : (item.isPreset ?? false));
   const priceVal = typeof item.price === 'number' ? item.price : null;
+  const quickColorVal = sanitizeQuickColor(item.quick_color ?? item.quickColor);
 
   const payload: Record<string, any> = {
     name: item.name,
@@ -72,6 +81,7 @@ export function toRawMaterialSnake(item: Record<string, any>) {
     is_sellable: isSellable,
     is_quick_access: isQuickAccess,
     price: priceVal,
+    quick_color: quickColorVal,
   };
 
   const validId = cleanUUID(item.id);
@@ -100,6 +110,8 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
     ? row.is_quick_access
     : (typeof row.isQuickAccess === 'boolean' ? row.isQuickAccess : (row.is_preset ?? row.isPreset ?? false));
 
+  const quickColor = sanitizeQuickColor(row.quick_color ?? row.quickColor) as any;
+
   return {
     id: String(row.id),
     name: row.name,
@@ -114,6 +126,8 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
     isQuickAccess,
     is_quick_access: isQuickAccess,
     price: typeof row.price === 'number' ? row.price : undefined,
+    quickColor,
+    quick_color: quickColor,
     // Compatibilidad bidireccional
     current_stock: currentStock,
     min_stock: minStock,
@@ -343,11 +357,20 @@ export async function insertRawMaterial(material: Record<string, any> | Record<s
 
     const allHaveValidId = payload.length > 0 && payload.every((p) => Boolean(p.id));
 
-    const query = allHaveValidId
-      ? supabase.from('raw_materials').upsert(payload, { onConflict: 'id' })
-      : supabase.from('raw_materials').insert(payload);
+    const runQuery = (rows: Record<string, any>[]) =>
+      allHaveValidId
+        ? supabase.from('raw_materials').upsert(rows, { onConflict: 'id' }).select()
+        : supabase.from('raw_materials').insert(rows).select();
 
-    const { data, error } = await query.select();
+    let { data, error } = await runQuery(payload);
+
+    // Fallback seguro si la columna quick_color aún no existe en el esquema remoto
+    if (error && error.message && error.message.includes('quick_color')) {
+      const fallbackPayload = payload.map(({ quick_color: _qc, ...rest }) => rest);
+      const retry = await runQuery(fallbackPayload);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.warn('[Supabase] insertRawMaterial warning:', error.message);

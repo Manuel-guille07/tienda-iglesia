@@ -43,6 +43,61 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
   const customer = customers.find((c) => c.id === customerId);
 
+  // Estilos de Color Semántico Sutil Quiet Luxury por Método de Pago (10%-15% opacidad, alto contraste)
+  const getMethodSemanticClasses = (id: PaymentMethod, active: boolean) => {
+    switch (id) {
+      case 'efectivo':
+        // Verde Salvia / Esmeralda
+        return active
+          ? isDark
+            ? 'bg-emerald-500/25 border-emerald-400 text-emerald-100 ring-1 ring-emerald-400 font-semibold'
+            : 'bg-emerald-500/20 border-emerald-800 text-emerald-950 ring-1 ring-emerald-800 font-semibold'
+          : isDark
+          ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-200 hover:bg-emerald-500/20'
+          : 'bg-emerald-500/10 border-emerald-600/25 text-emerald-900 hover:bg-emerald-500/15';
+
+      case 'datafono':
+        // Azul Pizarra / Índigo
+        return active
+          ? isDark
+            ? 'bg-indigo-500/25 border-indigo-400 text-indigo-100 ring-1 ring-indigo-400 font-semibold'
+            : 'bg-indigo-500/20 border-indigo-800 text-indigo-950 ring-1 ring-indigo-800 font-semibold'
+          : isDark
+          ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-200 hover:bg-indigo-500/20'
+          : 'bg-indigo-500/10 border-indigo-600/25 text-indigo-900 hover:bg-indigo-500/15';
+
+      case 'fiado':
+        // Ámbar / Naranja quemado
+        return active
+          ? isDark
+            ? 'bg-amber-500/25 border-amber-400 text-amber-100 ring-1 ring-amber-400 font-semibold'
+            : 'bg-amber-500/20 border-amber-800 text-amber-950 ring-1 ring-amber-800 font-semibold'
+          : isDark
+          ? 'bg-amber-500/10 border-amber-500/25 text-amber-200 hover:bg-amber-500/20'
+          : 'bg-amber-500/10 border-amber-600/25 text-amber-900 hover:bg-amber-500/15';
+
+      case 'donativo':
+        // Malva / Púrpura
+        return active
+          ? isDark
+            ? 'bg-purple-500/25 border-purple-400 text-purple-100 ring-1 ring-purple-400 font-semibold'
+            : 'bg-purple-500/20 border-purple-800 text-purple-950 ring-1 ring-purple-800 font-semibold'
+          : isDark
+          ? 'bg-purple-500/10 border-purple-500/25 text-purple-200 hover:bg-purple-500/20'
+          : 'bg-purple-500/10 border-purple-600/25 text-purple-900 hover:bg-purple-500/15';
+
+      default:
+        // Neutral Quiet Luxury (Piedra / Espresso)
+        return active
+          ? isDark
+            ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
+            : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
+          : isDark
+          ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] hover:border-[#3D352F]'
+          : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] hover:border-[#CFC8BC]';
+    }
+  };
+
   const handleConvertChangeToDonation = () => {
     if (!currentUser || isSubmitting) return;
     if (!Number.isFinite(tendered) || isNaN(tendered) || tendered <= total) {
@@ -243,7 +298,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Importe Total Destacado */}
+          {/* Importe Total Destacado (Neutral Quiet Luxury: Piedra / Espresso) */}
           <div
             className={`p-4 rounded-3xl border flex justify-between items-center ${
               isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
@@ -255,7 +310,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
             <span className="text-3xl font-bold tabular-nums">{total.toFixed(2)} €</span>
           </div>
 
-          {/* Métodos de Cobro Habituales */}
+          {/* Métodos de Cobro Habituales con Color Semántico Sutil */}
           <div>
             <label
               className={`text-xs font-semibold uppercase tracking-wider block mb-2 ${
@@ -277,15 +332,10 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                     key={m.id}
                     type="button"
                     onClick={() => setMethod(m.id)}
-                    className={`min-h-[64px] p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer ${
+                    className={`min-h-[68px] p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer select-none ${getMethodSemanticClasses(
+                      m.id,
                       active
-                        ? isDark
-                          ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
-                          : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
-                        : isDark
-                        ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA]'
-                        : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]'
-                    }`}
+                    )}`}
                   >
                     <Icon className="w-5 h-5" />
                     <span className="text-sm">{m.label}</span>
@@ -295,7 +345,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
             </div>
           </div>
 
-          {/* Registros Especiales */}
+          {/* Registros Especiales (Donativo Malva / Cortesía Neutral) */}
           <div className="grid grid-cols-2 gap-2.5">
             {[
               { id: 'donativo' as PaymentMethod, label: 'Donativo', icon: Heart },
@@ -308,15 +358,10 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                   key={m.id}
                   type="button"
                   onClick={() => setMethod(m.id)}
-                  className={`min-h-[48px] px-3.5 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-sm font-medium transition cursor-pointer ${
+                  className={`min-h-[48px] px-3.5 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-sm transition cursor-pointer select-none ${getMethodSemanticClasses(
+                    m.id,
                     active
-                      ? isDark
-                        ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
-                        : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
-                      : isDark
-                      ? 'bg-[#211D1A] border-[#2A2420] text-[#9A9086] hover:text-[#F4F0EA]'
-                      : 'bg-[#EFECE6] border-[#E2DDD5] text-[#6E665E] hover:text-[#141210]'
-                  }`}
+                  )}`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span>{m.label}</span>
@@ -347,10 +392,15 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
           {method === 'datafono' && (
             <div
               className={`p-4 rounded-2xl border flex items-center justify-between text-sm ${
-                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+                isDark
+                  ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-100'
+                  : 'bg-indigo-500/12 border-indigo-600/25 text-indigo-950'
               }`}
             >
-              <span>Cobro con Datáfono / Tarjeta:</span>
+              <span className="flex items-center gap-2 font-medium">
+                <CreditCard className="w-4 h-4 shrink-0" />
+                Cobro con Datáfono / Tarjeta:
+              </span>
               <strong className="text-base font-bold tabular-nums">{total.toFixed(2)} €</strong>
             </div>
           )}
@@ -358,10 +408,12 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
           {method === 'fiado' && (
             <div
               className={`p-4 rounded-2xl border space-y-2 ${
-                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+                isDark
+                  ? 'bg-amber-500/15 border-amber-500/30 text-amber-100'
+                  : 'bg-amber-500/12 border-amber-600/25 text-amber-950'
               }`}
             >
-              <label className="text-sm font-medium block">Seleccionar Hermano / Cliente</label>
+              <label className="text-sm font-semibold block">Seleccionar Hermano / Cliente</label>
               <select
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
@@ -383,10 +435,16 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
           {(method === 'donativo' || method === 'consumo_interno') && (
             <div
               className={`p-4 rounded-2xl border space-y-2 ${
-                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+                method === 'donativo'
+                  ? isDark
+                    ? 'bg-purple-500/15 border-purple-500/30 text-purple-100'
+                    : 'bg-purple-500/12 border-purple-600/25 text-purple-950'
+                  : isDark
+                  ? 'bg-[#211D1A] border-[#2A2420]'
+                  : 'bg-[#EFECE6] border-[#E2DDD5]'
               }`}
             >
-              <label className="text-sm font-medium block">
+              <label className="text-sm font-semibold block">
                 {method === 'donativo' ? 'Nota de Donativo (Opcional)' : 'Motivo / Autorizado por'}
               </label>
               <input

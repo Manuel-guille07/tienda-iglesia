@@ -1,7 +1,75 @@
 import React from 'react';
 import { usePOSStore, getProductStockInfo } from '../../store/usePOSStore';
 import { useTheme } from '../../context/ThemeContext';
+import { QuickColor } from '../../types';
 import { Plus, AlertTriangle, Ban, Zap } from 'lucide-react';
+
+function getQuickButtonStyles(color: QuickColor | undefined, isDark: boolean, qtyInCart: number) {
+  const key = color || 'default';
+
+  const palette: Record<
+    QuickColor,
+    {
+      light: string;
+      dark: string;
+      plusLight: string;
+      plusDark: string;
+    }
+  > = {
+    default: {
+      light: 'bg-[#EFECE6] text-[#141210] border-[#E2DDD5] hover:border-[#CFC8BC]',
+      dark: 'bg-[#211D1A] text-[#F4F0EA] border-[#2A2420] hover:border-[#3D352F]',
+      plusLight: 'bg-[#141210] text-[#FAF8F5]',
+      plusDark: 'bg-[#EFECE6] text-[#141210]',
+    },
+    sage: {
+      light:
+        'bg-emerald-500/15 text-emerald-950 border-emerald-600/25 hover:border-emerald-600/45',
+      dark: 'bg-emerald-500/20 text-emerald-100 border-emerald-500/30 hover:border-emerald-400/50',
+      plusLight: 'bg-emerald-900 text-emerald-50',
+      plusDark: 'bg-emerald-200 text-emerald-950',
+    },
+    slate: {
+      light: 'bg-sky-500/15 text-sky-950 border-sky-600/25 hover:border-sky-600/45',
+      dark: 'bg-sky-500/20 text-sky-100 border-sky-500/30 hover:border-sky-400/50',
+      plusLight: 'bg-sky-900 text-sky-50',
+      plusDark: 'bg-sky-200 text-sky-950',
+    },
+    terracotta: {
+      light: 'bg-rose-500/15 text-rose-950 border-rose-600/25 hover:border-rose-600/45',
+      dark: 'bg-rose-500/20 text-rose-100 border-rose-500/30 hover:border-rose-400/50',
+      plusLight: 'bg-rose-900 text-rose-50',
+      plusDark: 'bg-rose-200 text-rose-950',
+    },
+    amber: {
+      light: 'bg-amber-500/15 text-amber-950 border-amber-600/25 hover:border-amber-600/45',
+      dark: 'bg-amber-500/20 text-amber-100 border-amber-500/30 hover:border-amber-400/50',
+      plusLight: 'bg-amber-900 text-amber-50',
+      plusDark: 'bg-amber-200 text-amber-950',
+    },
+    mauve: {
+      light:
+        'bg-purple-500/15 text-purple-950 border-purple-600/25 hover:border-purple-600/45',
+      dark: 'bg-purple-500/20 text-purple-100 border-purple-500/30 hover:border-purple-400/50',
+      plusLight: 'bg-purple-900 text-purple-50',
+      plusDark: 'bg-purple-200 text-purple-950',
+    },
+  };
+
+  const selected = palette[key] || palette.default;
+  const surface = isDark ? selected.dark : selected.light;
+  const activeRing =
+    qtyInCart > 0
+      ? isDark
+        ? 'ring-2 ring-[#EFECE6]'
+        : 'ring-2 ring-[#141210]'
+      : '';
+
+  return {
+    cardClass: `${surface} ${activeRing}`,
+    plusClass: isDark ? selected.plusDark : selected.plusLight,
+  };
+}
 
 export const QuickCafeteriaKeypad: React.FC = () => {
   const { theme } = useTheme();
@@ -10,7 +78,6 @@ export const QuickCafeteriaKeypad: React.FC = () => {
 
   const sellableProducts = products.filter((p) => p.isSellable !== false);
   const explicitPresets = sellableProducts.filter((p) => p.isQuickAccess || p.isPreset);
-  // Si hay productos marcados como rápidos los usamos; de lo contrario mostramos los primeros 8 productos estrella
   const presets = explicitPresets.length > 0 ? explicitPresets : sellableProducts.slice(0, 8);
 
   const getCartQuantity = (productId: string) => {
@@ -82,6 +149,11 @@ export const QuickCafeteriaKeypad: React.FC = () => {
           const isOut = stockInfo.status === 'out';
           const isLow = stockInfo.status === 'low';
           const qtyInCart = getCartQuantity(product.id);
+          const { cardClass, plusClass } = getQuickButtonStyles(
+            (product.quickColor || product.quick_color) as QuickColor | undefined,
+            isDark,
+            qtyInCart
+          );
 
           return (
             <button
@@ -94,13 +166,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                   ? isDark
                     ? 'bg-[#171412]/50 border-[#2A2420] opacity-45 cursor-not-allowed'
                     : 'bg-[#FAF8F5]/60 border-[#E2DDD5] opacity-50 cursor-not-allowed'
-                  : qtyInCart > 0
-                  ? isDark
-                    ? 'bg-[#211D1A] border-[#EFECE6] ring-1 ring-[#EFECE6] active:scale-[0.98] cursor-pointer'
-                    : 'bg-[#EFECE6] border-[#141210] ring-1 ring-[#141210] active:scale-[0.98] cursor-pointer'
-                  : isDark
-                  ? 'bg-[#211D1A] border-[#2A2420] hover:border-[#3D352F] active:scale-[0.98] cursor-pointer'
-                  : 'bg-[#EFECE6] border-[#E2DDD5] hover:border-[#CFC8BC] active:scale-[0.98] cursor-pointer'
+                  : `${cardClass} active:scale-[0.98] cursor-pointer`
               }`}
             >
               {/* Fila superior: Nombre del producto + Insignia de cantidad en carrito */}
@@ -135,7 +201,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                       Agotado
                     </span>
                   ) : isLow ? (
-                    <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-amber-500">
+                    <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       Quedan {stockInfo.availableUnits}
                     </span>
@@ -148,9 +214,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                       ? isDark
                         ? 'bg-[#171412] text-[#9A9086]'
                         : 'bg-[#FAF8F5] text-[#6E665E]'
-                      : isDark
-                      ? 'bg-[#EFECE6] text-[#141210]'
-                      : 'bg-[#141210] text-[#FAF8F5]'
+                      : plusClass
                   }`}
                 >
                   {isOut ? <Ban className="w-4 h-4" /> : <Plus className="w-5 h-5" />}
