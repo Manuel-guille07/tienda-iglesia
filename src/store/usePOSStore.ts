@@ -12,6 +12,74 @@ import {
 } from '../services/db';
 import toast from 'react-hot-toast';
 
+export interface ProductStockInfo {
+  status: 'ok' | 'low' | 'out';
+  availableUnits: number;
+  minStockAlert: number;
+  limitingItemName?: string;
+}
+
+export function getProductStockInfo(product: Product, rawMaterials: RawMaterial[]): ProductStockInfo {
+  let minAvailableUnits = typeof product.directStock === 'number' ? product.directStock : Infinity;
+  let minThreshold = typeof product.minDirectStock === 'number' ? product.minDirectStock : 0;
+  let isOut = typeof product.directStock === 'number' && product.directStock <= 0;
+  let isLow =
+    typeof product.directStock === 'number' &&
+    typeof product.minDirectStock === 'number' &&
+    product.directStock > 0 &&
+    product.directStock <= product.minDirectStock;
+  let limitingItemName: string | undefined;
+
+  if (product.recipe && product.recipe.length > 0 && rawMaterials.length > 0) {
+    for (const ing of product.recipe) {
+      const mat = rawMaterials.find((m) => m.id === ing.rawMaterialId);
+      if (mat) {
+        const reqQty = ing.quantity > 0 ? ing.quantity : 1;
+        const possibleUnits = mat.isOutOfStock ? 0 : Math.floor(mat.currentStock / reqQty);
+        if (possibleUnits < minAvailableUnits) {
+          minAvailableUnits = possibleUnits;
+        }
+        if (mat.isOutOfStock || mat.currentStock <= 0 || mat.currentStock < reqQty) {
+          isOut = true;
+          limitingItemName = mat.name;
+        } else if (mat.currentStock <= mat.minStock) {
+          isLow = true;
+          minThreshold = Math.max(minThreshold, mat.minStock);
+          if (!limitingItemName) limitingItemName = mat.name;
+        }
+      }
+    }
+  }
+
+  if (minAvailableUnits === Infinity) {
+    minAvailableUnits = 99;
+  }
+
+  if (isOut || minAvailableUnits <= 0 || product.badge === 'Agotado') {
+    return {
+      status: 'out',
+      availableUnits: 0,
+      minStockAlert: minThreshold,
+      limitingItemName,
+    };
+  }
+
+  if (isLow || product.badge === 'Bajo') {
+    return {
+      status: 'low',
+      availableUnits: minAvailableUnits,
+      minStockAlert: minThreshold,
+      limitingItemName,
+    };
+  }
+
+  return {
+    status: 'ok',
+    availableUnits: minAvailableUnits,
+    minStockAlert: minThreshold,
+  };
+}
+
 export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts: Product[] = []): Product[] {
   const colors = ['amber', 'orange', 'yellow', 'emerald', 'cyan', 'red', 'indigo', 'purple'];
 
@@ -185,15 +253,36 @@ export const usePOSStore = create<POSState>((set, get) => ({
   setSelectedCategory: (category) => set({ selectedCategory: category }),
 
   addToCart: (product) => {
-    const { cart } = get();
-    const existingIndex = cart.findIndex((item) => item.product.id === product.id);
+    const { cart, rawMaterials, checkStockAvailability } = get();
+    const stockInfo = getProductStockInfo(product, rawMaterials);
 
-    if (existingIndex > -1) {
-      const updatedCart = [...cart];
-      updatedCart[existingIndex].quantity += 1;
-      set({ cart: updatedCart });
-    } else {
-      set({ cart: [...cart, { product, quantity: 1 }] });
+    if (stockInfo.status === 'out') {
+      toast.error(
+        `Producto agotado: ${product.name}${stockInfo.limitingItemName && stockInfo.limitingItemName !== product.name ? ` (Insumo sin stock: ${stockInfo.limitingItemName})` : ''}`
+      );
+      return;
+    }
+
+    const existingIndex = cart.findIndex((item) => item.product.id === product.id);
+    const nextCart =
+      existingIndex > -1
+        ? cart.map((item, idx) =>
+            idx === existingIndex ? { ...item, quantity: item.quantity + 1 } : item
+          )
+        : [...cart, { product, quantity: 1 }];
+
+    const availability = checkStockAvailability(nextCart);
+    if (!availability.available) {
+      toast.error(`Stock insuficiente: ${availability.missing.join(', ')}`);
+      return;
+    }
+
+    set({ cart: nextCart });
+
+    if (stockInfo.status === 'low' && existingIndex === -1) {
+      toast(`Alerta de stock bajo: ${product.name} (${stockInfo.availableUnits} disp.)`, {
+        icon: '⚠️',
+      });
     }
   },
 

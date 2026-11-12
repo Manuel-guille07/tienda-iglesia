@@ -4,11 +4,12 @@ import { useCloseoutStore } from '../../store/useCloseoutStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { Calculator, FileSpreadsheet, Download } from 'lucide-react';
+import { Calculator, FileSpreadsheet, Download, Printer } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { IncidentModal } from './IncidentModal';
 import { IncidentListPanel } from './IncidentListPanel';
 import { CashArqueoPanel } from './CashArqueoPanel';
+import { PrintableReportModal } from '../common/PrintableReportModal';
 import toast from 'react-hot-toast';
 
 export const CloseoutScreen: React.FC = () => {
@@ -30,8 +31,7 @@ export const CloseoutScreen: React.FC = () => {
 
   const [counted, setCounted] = useState<number>(0);
   const [modalOpen, setModalOpen] = useState(false);
-
-  const isTesoreriaOrPastor = currentUser?.role === 'Tesorería' || currentUser?.role === 'Pastor';
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   // Obtener cobros y abonos de fiados
   const allTabPayments = customers.flatMap((c) =>
@@ -113,7 +113,7 @@ export const CloseoutScreen: React.FC = () => {
     totalDonativos,
     totalConsumoInterno: totalConsumo,
     totalCoffeesSold: totalCoffees,
-    totalSalesCount: sales.length,
+    totalSalesCount: shiftSales.length,
     totalRevenue: Number((expectedCash + totalCard + totalDonativos).toFixed(2)),
     difference,
     incidents,
@@ -128,7 +128,7 @@ export const CloseoutScreen: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Calculator className="w-5 h-5 text-indigo-400" />
@@ -138,21 +138,30 @@ export const CloseoutScreen: React.FC = () => {
             {t('closeout.subtitle')} • Turno por: <strong className="text-white">{currentUser?.name}</strong> ({currentUser?.role})
           </p>
         </div>
-        <div className="flex gap-2">
-          {isTesoreriaOrPastor && (
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Download className="w-4 h-4" />}
-              onClick={() => {
-                const s = recordShiftClose(getShift());
-                downloadCSV(s, sales, shiftTabPayments);
-                toast.success('CSV descargado con formato Excel');
-              }}
-            >
-              CSV
-            </Button>
-          )}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Download className="w-4 h-4 text-emerald-400" />}
+            onClick={() => {
+              const s = recordShiftClose(getShift());
+              downloadCSV(s, shiftSales, shiftTabPayments);
+              toast.success(t('export.csvSuccess'));
+            }}
+          >
+            {t('export.csvButton')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Printer className="w-4 h-4 text-indigo-400" />}
+            onClick={() => {
+              setPdfModalOpen(true);
+              toast.success(t('export.pdfReady'));
+            }}
+          >
+            {t('export.pdfButton')}
+          </Button>
           <Button
             variant="primary"
             size="sm"
@@ -241,6 +250,27 @@ export const CloseoutScreen: React.FC = () => {
           if (!currentUser) return;
           addIncident(text, cat, currentUser.name, currentUser.role);
           toast.success('Incidencia guardada');
+        }}
+      />
+
+      <PrintableReportModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        report={{
+          title: t('closeout.title'),
+          subtitle: 'Arqueo de turno, cobros de fiados y desglose por método de pago',
+          generatedBy: currentUser?.name || 'Responsable',
+          generatedRole: currentUser?.role || 'Vendedor',
+          periodLabel: 'Turno Actual',
+          kpis: [
+            { label: 'Efectivo Esperado', value: `${expectedCash.toFixed(2)}€` },
+            { label: 'Datáfono Total', value: `${totalCard.toFixed(2)}€` },
+            { label: 'Nuevos Fiados', value: `${totalFiados.toFixed(2)}€` },
+            { label: 'Donativos', value: `${totalDonativos.toFixed(2)}€` },
+          ],
+          sales: shiftSales,
+          shiftClose: getShift(),
+          voidAudits: shiftVoidAudits,
         }}
       />
     </div>

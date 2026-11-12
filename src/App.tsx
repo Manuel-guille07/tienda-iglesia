@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { AppLayout } from './components/layout/AppLayout';
 import { POSScreen } from './components/pos/POSScreen';
+import { DashboardScreen } from './components/dashboard/DashboardScreen';
 import { InventoryScreen } from './components/inventory/InventoryScreen';
 import { TabsScreen } from './components/tabs/TabsScreen';
 import { CloseoutScreen } from './components/closeout/CloseoutScreen';
@@ -68,6 +69,16 @@ const App: React.FC = () => {
           >
             {/* POS Terminal */}
             <Route path="/pos" element={<POSScreen />} />
+
+            {/* Dashboard Estadístico (RBAC: Pastor, Tesorería, super_admin) */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute allowedRoles={['Pastor', 'Tesorería', 'super_admin']}>
+                  <DashboardScreen />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Historial de Ventas & Anulación */}
             <Route path="/historial" element={<SalesHistoryScreen />} />

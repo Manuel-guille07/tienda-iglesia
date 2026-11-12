@@ -29,9 +29,21 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  // 2. Verificación de Rol (RBAC)
+  // 2. Verificación de Rol (RBAC) insensible a mayúsculas/acentos
   if (allowedRoles && allowedRoles.length > 0) {
-    const hasPermission = currentUser.role === 'super_admin' || allowedRoles.includes(currentUser.role);
+    const normalizeRole = (r: string) =>
+      r
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    const userRoleNorm = normalizeRole(currentUser.role || '');
+    const allowedNorm = allowedRoles.map((r) => normalizeRole(String(r)));
+
+    const hasPermission =
+      userRoleNorm === 'super_admin' || allowedNorm.includes(userRoleNorm);
+
     if (!hasPermission) {
       toast.error(t('toast.accessDenied'));
       return <Navigate to="/pos" replace />;

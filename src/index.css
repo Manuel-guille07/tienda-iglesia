@@ -5,3 +5,26 @@
     @apply bg-slate-900 text-slate-100;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #elarx-printable-sheet,
+  #elarx-printable-sheet * {
+    visibility: visible;
+  }
+  #elarx-printable-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
+

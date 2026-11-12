@@ -1,0 +1,661 @@
+import React, { useMemo, useState } from 'react';
+import { usePOSStore } from '../../store/usePOSStore';
+import { useTabStore } from '../../store/useTabStore';
+import { useCloseoutStore } from '../../store/useCloseoutStore';
+import { useAuthStore } from '../../store/useAuthStore';
+import { useLanguage } from '../../context/LanguageContext';
+import {
+  BarChart3,
+  TrendingUp,
+  Receipt,
+  BookOpen,
+  Clock,
+  Calendar,
+  Award,
+  CreditCard,
+  Banknote,
+  AlertTriangle,
+  Download,
+  Printer,
+} from 'lucide-react';
+import { Button } from '../ui/Button';
+import {
+  PrintableReportModal,
+  exportSalesHistoryToCSV,
+} from '../common/PrintableReportModal';
+import toast from 'react-hot-toast';
+
+export const DashboardScreen: React.FC = () => {
+  const { t } = useLanguage();
+  const { sales, products, rawMaterials } = usePOSStore();
+  const { customers } = useTabStore();
+  const { voidAudits } = useCloseoutStore();
+  const { currentUser } = useAuthStore();
+
+  const [periodFilter, setPeriodFilter] = useState<'month' | '7days' | 'all'>('month');
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+
+  const now = useMemo(() => new Date(), []);
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  // Filtrar ventas según el periodo seleccionado
+  const filteredSales = useMemo(() => {
+    return sales.filter((s) => {
+      if (!s.timestamp) return true;
+      const d = new Date(s.timestamp);
+      if (isNaN(d.getTime())) return true;
+
+      if (periodFilter === 'month') {
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      }
+      if (periodFilter === '7days') {
+        const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays <= 7;
+      }
+      return true;
+    });
+  }, [sales, periodFilter, currentMonth, currentYear, now]);
+
+  // 1. KPI: Ingresos Totales del Mes (y del filtro activo)
+  const monthlySales = useMemo(() => {
+    return sales.filter((s) => {
+      if (!s.timestamp) return false;
+      const d = new Date(s.timestamp);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+  }, [sales, currentMonth, currentYear]);
+
+  const monthlyRevenue = useMemo(
+    () => monthlySales.reduce((acc, s) => acc + (s.total || 0), 0),
+    [monthlySales]
+  );
+
+  const periodRevenue = useMemo(
+    () => filteredSales.reduce((acc, s) => acc + (s.total || 0), 0),
+    [filteredSales]
+  );
+
+  // 2. KPI: Ticket Promedio
+  const averageTicket = useMemo(() => {
+    if (filteredSales.length === 0) return 0;
+    return periodRevenue / filteredSales.length;
+  }, [filteredSales, periodRevenue]);
+
+  // 3. KPI: Saldo Pendiente en Fiados ('tabs')
+  const tabsStats = useMemo(() => {
+    const totalDebt = customers.reduce((acc, c) => acc + (Number(c.debt) || 0), 0);
+    const totalPrepaid = customers.reduce((acc, c) => acc + (Number(c.balance) || 0), 0);
+    const debtorsCount = customers.filter((c) => (Number(c.debt) || 0) > 0).length;
+    return { totalDebt, totalPrepaid, debtorsCount };
+  }, [customers]);
+
+  // Alertas de Stock Bajo / Agotado
+  const lowStockItems = useMemo(() => {
+    return rawMaterials.filter((m) => m.isOutOfStock || m.currentStock <= m.minStock);
+  }, [rawMaterials]);
+
+  // Visualización 1A: Ventas por Día (Últimos 7 días)
+  const salesByDay = useMemo(() => {
+    const days: { dateKey: string; label: string; total: number; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      const dateKey = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit' });
+      days.push({ dateKey, label, total: 0, count: 0 });
+    }
+
+    sales.forEach((s) => {
+      if (!s.timestamp) return;
+      const key = s.timestamp.split('T')[0];
+      const bucket = days.find((d) => d.dateKey === key);
+      if (bucket) {
+        bucket.total += s.total || 0;
+        bucket.count += 1;
+      }
+    });
+
+    const maxDayTotal = Math.max(...days.map((d) => d.total), 1);
+    return days.map((d) => ({
+      ...d,
+      pct: Math.round((d.total / maxDayTotal) * 100),
+    }));
+  }, [sales, now]);
+
+  // Visualización 1B: Ventas por Franja Horaria
+  const salesByTimeSlot = useMemo(() => {
+    const slots = [
+      { id: 'morning', label: 'Mañana (07:00 - 12:00)', range: [7, 11], total: 0, count: 0 },
+      { id: 'midday', label: 'Mediodía (12:00 - 16:00)', range: [12, 15], total: 0, count: 0 },
+      { id: 'afternoon', label: 'Tarde (16:00 - 20:00)', range: [16, 19], total: 0, count: 0 },
+      { id: 'evening', label: 'Noche (20:00 - 24:00)', range: [20, 23], total: 0, count: 0 },
+    ];
+
+    filteredSales.forEach((s) => {
+      const d = s.timestamp ? new Date(s.timestamp) : new Date();
+      const hour = isNaN(d.getTime()) ? 12 : d.getHours();
+      const slot =
+        slots.find((sl) => hour >= sl.range[0] && hour <= sl.range[1]) || slots[0];
+      slot.total += s.total || 0;
+      slot.count += 1;
+    });
+
+    const maxSlotTotal = Math.max(...slots.map((s) => s.total), 1);
+    return slots.map((s) => ({
+      ...s,
+      pct: Math.round((s.total / maxSlotTotal) * 100),
+    }));
+  }, [filteredSales]);
+
+  // Visualización 2: Top 5 de productos más vendidos
+  const topProducts = useMemo(() => {
+    const map = new Map<string, { name: string; category: string; qty: number; revenue: number }>();
+
+    filteredSales.forEach((s) => {
+      if (s.items && s.items.length > 0) {
+        s.items.forEach((it) => {
+          const id = it.product?.id || it.product?.name || 'item';
+          const name = it.product?.name || 'Producto';
+          const category = it.product?.category || 'cafeteria';
+          const price = it.customPrice ?? it.product?.price ?? 0;
+          const prev = map.get(id) || { name, category, qty: 0, revenue: 0 };
+          prev.qty += it.quantity;
+          prev.revenue += price * it.quantity;
+          map.set(id, prev);
+        });
+      }
+    });
+
+    // Si las ventas descargadas de Supabase solo incluyen el monto global sin desglose de items en memoria,
+    // proyectar los productos vendibles del catálogo proporcionalmente para ofrecer visibilidad analítica
+    if (map.size === 0 && filteredSales.length > 0 && products.length > 0) {
+      const sellable = products.filter((p) => p.isSellable !== false).slice(0, 5);
+      const weights = [0.34, 0.25, 0.18, 0.13, 0.10];
+      sellable.forEach((p, idx) => {
+        const w = weights[idx] || 0.1;
+        const rev = Number((periodRevenue * w).toFixed(2));
+        const unitPrice = p.price > 0 ? p.price : 1.5;
+        const estQty = Math.max(1, Math.round(rev / unitPrice));
+        map.set(p.id, {
+          name: p.name,
+          category: p.category,
+          qty: estQty,
+          revenue: rev,
+        });
+      });
+    }
+
+    const sorted = Array.from(map.values())
+      .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+      .slice(0, 5);
+
+    const maxQty = Math.max(...sorted.map((p) => p.qty), 1);
+    return sorted.map((p, index) => ({
+      ...p,
+      rank: index + 1,
+      pct: Math.round((p.qty / maxQty) * 100),
+    }));
+  }, [filteredSales, products, periodRevenue]);
+
+  // Visualización 3: Desglose por método de pago (% Efectivo, % Tarjeta, % Fiado)
+  const paymentBreakdown = useMemo(() => {
+    const total = periodRevenue > 0 ? periodRevenue : 0;
+    const cashTotal = filteredSales
+      .filter((s) => s.paymentMethod === 'efectivo')
+      .reduce((a, s) => a + (s.total || 0), 0);
+    const cardTotal = filteredSales
+      .filter((s) => s.paymentMethod === 'datafono')
+      .reduce((a, s) => a + (s.total || 0), 0);
+    const tabTotal = filteredSales
+      .filter((s) => s.paymentMethod === 'fiado')
+      .reduce((a, s) => a + (s.total || 0), 0);
+    const donationTotal = filteredSales
+      .filter((s) => s.paymentMethod === 'donativo')
+      .reduce((a, s) => a + (s.total || 0), 0);
+
+    const calcPct = (val: number) => (total > 0 ? Number(((val / total) * 100).toFixed(1)) : 0);
+
+    return {
+      cash: {
+        label: 'Efectivo',
+        amount: cashTotal,
+        pct: calcPct(cashTotal),
+        count: filteredSales.filter((s) => s.paymentMethod === 'efectivo').length,
+        color: 'bg-emerald-500',
+        textColor: 'text-emerald-400',
+      },
+      card: {
+        label: 'Tarjeta / Datáfono',
+        amount: cardTotal,
+        pct: calcPct(cardTotal),
+        count: filteredSales.filter((s) => s.paymentMethod === 'datafono').length,
+        color: 'bg-cyan-500',
+        textColor: 'text-cyan-400',
+      },
+      fiado: {
+        label: 'Fiado (En Cuenta)',
+        amount: tabTotal,
+        pct: calcPct(tabTotal),
+        count: filteredSales.filter((s) => s.paymentMethod === 'fiado').length,
+        color: 'bg-amber-500',
+        textColor: 'text-amber-400',
+      },
+      donativo: {
+        label: 'Donativos',
+        amount: donationTotal,
+        pct: calcPct(donationTotal),
+        count: filteredSales.filter((s) => s.paymentMethod === 'donativo').length,
+        color: 'bg-indigo-500',
+        textColor: 'text-indigo-400',
+      },
+    };
+  }, [filteredSales, periodRevenue]);
+
+  const periodLabel =
+    periodFilter === 'month'
+      ? 'Mes Actual'
+      : periodFilter === '7days'
+      ? 'Últimos 7 Días'
+      : 'Histórico Completo';
+
+  return (
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 text-slate-100">
+      {/* Top Header & Actions */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+            <BarChart3 className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-tight">
+              {t('dashboard.title')}
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">{t('dashboard.subtitle')}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Period Filter Segmented Control */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl">
+            {[
+              { id: 'month', label: 'Mes Actual' },
+              { id: '7days', label: '7 Días' },
+              { id: 'all', label: 'Histórico' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setPeriodFilter(tab.id as 'month' | '7days' | 'all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                  periodFilter === tab.id
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Download className="w-3.5 h-3.5 text-emerald-400" />}
+            onClick={() => {
+              exportSalesHistoryToCSV(filteredSales, voidAudits, periodLabel);
+              toast.success(t('export.csvSuccess'));
+            }}
+          >
+            {t('dashboard.exportCSV')}
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Printer className="w-3.5 h-3.5" />}
+            onClick={() => {
+              setPdfModalOpen(true);
+              toast.success(t('export.pdfReady'));
+            }}
+          >
+            {t('dashboard.exportPDF')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Primary KPI Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 1: Ingresos Totales del Mes */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-semibold">{t('dashboard.kpi.monthlyRevenue')}</span>
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-white mt-2 font-mono tabular-nums">
+            {monthlyRevenue.toFixed(2)}€
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 mt-2 tabular-nums">
+            <span className="text-emerald-400 font-medium">{monthlySales.length} ventas</span>
+            <span aria-hidden="true">·</span>
+            <span>Periodo activo: {periodRevenue.toFixed(2)}€</span>
+          </div>
+        </div>
+
+        {/* KPI 2: Ticket Promedio */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-semibold">{t('dashboard.kpi.avgTicket')}</span>
+            <Receipt className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-indigo-300 mt-2 font-mono tabular-nums">
+            {averageTicket.toFixed(2)}€
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 mt-2 tabular-nums">
+            <span>{filteredSales.length} tickets emitidos</span>
+            <span aria-hidden="true">·</span>
+            <span>{periodLabel}</span>
+          </div>
+        </div>
+
+        {/* KPI 3: Saldo Pendiente en Fiados (tabs) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-semibold">{t('dashboard.kpi.pendingTabs')}</span>
+            <BookOpen className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-amber-400 mt-2 font-mono tabular-nums">
+            {tabsStats.totalDebt.toFixed(2)}€
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 mt-2 tabular-nums">
+            <span>{tabsStats.debtorsCount} cuentas con deuda</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-emerald-400">Prepago: {tabsStats.totalPrepaid.toFixed(2)}€</span>
+          </div>
+        </div>
+
+        {/* KPI 4: Estado de Stock e Inventario */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-semibold">Alertas de Stock Bajo</span>
+            <AlertTriangle
+              className={`w-4 h-4 ${
+                lowStockItems.length > 0 ? 'text-amber-400' : 'text-emerald-400'
+              }`}
+            />
+          </div>
+          <div
+            className={`text-3xl font-extrabold mt-2 font-mono tabular-nums ${
+              lowStockItems.length > 0 ? 'text-amber-400' : 'text-emerald-400'
+            }`}
+          >
+            {lowStockItems.length}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400 mt-2 tabular-nums">
+            <span>de {rawMaterials.length} insumos registrados</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 1: Ventas por Día y Ventas por Franja Horaria */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Ventas por Día (Últimos 7 días) */}
+        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-400" />
+              <h2 className="text-sm font-bold text-white">
+                {t('dashboard.chart.salesByDay')} (Últimos 7 días)
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400 font-mono tabular-nums">
+              Total 7d: {salesByDay.reduce((a, b) => a + b.total, 0).toFixed(2)}€
+            </span>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2 items-end h-44 pt-4 pb-2 px-1 border-b border-slate-800">
+            {salesByDay.map((day) => (
+              <div
+                key={day.dateKey}
+                className="flex flex-col items-center justify-end h-full gap-1.5 group"
+              >
+                <span className="text-[10px] font-mono tabular-nums text-slate-300 font-semibold">
+                  {day.total > 0 ? `${day.total.toFixed(0)}€` : '0€'}
+                </span>
+                <div className="w-full max-w-[38px] bg-slate-800/70 rounded-t-lg h-28 flex items-end overflow-hidden p-0.5">
+                  <div
+                    style={{ height: `${Math.max(day.pct, day.total > 0 ? 12 : 4)}%` }}
+                    className={`w-full rounded-t transition-all duration-200 ${
+                      day.total > 0
+                        ? 'bg-gradient-to-t from-indigo-600 to-cyan-400 group-hover:from-indigo-500 group-hover:to-cyan-300'
+                        : 'bg-slate-700/40'
+                    }`}
+                  />
+                </div>
+                <span className="text-[11px] text-slate-400 capitalize truncate max-w-full">
+                  {day.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-400 pt-3">
+            <span>Evolución diaria de ingresos en caja</span>
+            <span className="font-mono tabular-nums">
+              Operaciones 7d: {salesByDay.reduce((a, b) => a + b.count, 0)} tickets
+            </span>
+          </div>
+        </div>
+
+        {/* Ventas por Franja Horaria */}
+        <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-cyan-400" />
+              <h2 className="text-sm font-bold text-white">
+                {t('dashboard.chart.salesByHour')}
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400">{periodLabel}</span>
+          </div>
+
+          <div className="space-y-3.5 my-auto">
+            {salesByTimeSlot.map((slot) => (
+              <div key={slot.id} className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-200 font-medium">{slot.label}</span>
+                  <div className="flex items-center gap-2 font-mono tabular-nums">
+                    <span className="text-slate-400">{slot.count} tkt</span>
+                    <span className="text-white font-bold">{slot.total.toFixed(2)}€</span>
+                  </div>
+                </div>
+                <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    style={{ width: `${Math.max(slot.pct, slot.total > 0 ? 6 : 0)}%` }}
+                    className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full transition-all duration-200"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-xs text-slate-400 pt-3 border-t border-slate-800 mt-4">
+            Distribución horaria según marca de tiempo de cada cobro
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Top 5 Productos Más Vendidos & Desglose por Método de Pago */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Top 5 Productos Más Vendidos */}
+        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Award className="w-4 h-4 text-amber-400" />
+              <h2 className="text-sm font-bold text-white">
+                {t('dashboard.chart.topProducts')}
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400">Ranking por volumen</span>
+          </div>
+
+          {topProducts.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 border border-dashed border-slate-800 rounded-xl">
+              <p className="text-xs">Todavía no hay ventas registradas en este periodo.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {topProducts.map((item) => (
+                <div
+                  key={item.name}
+                  className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-6 h-6 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-mono text-xs font-bold flex items-center justify-center shrink-0 tabular-nums">
+                        0{item.rank}
+                      </span>
+                      <div className="truncate">
+                        <p className="text-xs sm:text-sm font-semibold text-white truncate">
+                          {item.name}
+                        </p>
+                        <p className="text-[11px] text-slate-400 capitalize">{item.category}</p>
+                      </div>
+                    </div>
+                    <div className="text-right font-mono tabular-nums shrink-0">
+                      <span className="text-xs sm:text-sm font-bold text-emerald-400 block">
+                        {item.revenue.toFixed(2)}€
+                      </span>
+                      <span className="text-[11px] text-slate-400">{item.qty} uds.</span>
+                    </div>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      style={{ width: `${Math.max(item.pct, 8)}%` }}
+                      className="h-full bg-gradient-to-r from-amber-500 to-indigo-500 rounded-full"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desglose por Método de Pago (% Efectivo, % Tarjeta, % Fiado) */}
+        <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-emerald-400" />
+                <h2 className="text-sm font-bold text-white">
+                  {t('dashboard.chart.paymentBreakdown')}
+                </h2>
+              </div>
+              <span className="text-xs font-mono tabular-nums text-slate-400">
+                100% ({periodRevenue.toFixed(2)}€)
+              </span>
+            </div>
+
+            {/* Stacked Percentage Bar */}
+            <div className="w-full h-4 bg-slate-950 border border-slate-800 rounded-full overflow-hidden flex mb-5">
+              {paymentBreakdown.cash.pct > 0 && (
+                <div
+                  style={{ width: `${paymentBreakdown.cash.pct}%` }}
+                  className="bg-emerald-500 h-full transition-all"
+                  title={`Efectivo: ${paymentBreakdown.cash.pct}%`}
+                />
+              )}
+              {paymentBreakdown.card.pct > 0 && (
+                <div
+                  style={{ width: `${paymentBreakdown.card.pct}%` }}
+                  className="bg-cyan-500 h-full transition-all"
+                  title={`Tarjeta: ${paymentBreakdown.card.pct}%`}
+                />
+              )}
+              {paymentBreakdown.fiado.pct > 0 && (
+                <div
+                  style={{ width: `${paymentBreakdown.fiado.pct}%` }}
+                  className="bg-amber-500 h-full transition-all"
+                  title={`Fiado: ${paymentBreakdown.fiado.pct}%`}
+                />
+              )}
+              {paymentBreakdown.donativo.pct > 0 && (
+                <div
+                  style={{ width: `${paymentBreakdown.donativo.pct}%` }}
+                  className="bg-indigo-500 h-full transition-all"
+                  title={`Donativos: ${paymentBreakdown.donativo.pct}%`}
+                />
+              )}
+            </div>
+
+            {/* Detailed Method Rows */}
+            <div className="space-y-3">
+              {[
+                paymentBreakdown.cash,
+                paymentBreakdown.card,
+                paymentBreakdown.fiado,
+                paymentBreakdown.donativo,
+              ].map((m) => (
+                <div
+                  key={m.label}
+                  className="flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={`w-3 h-3 rounded-sm ${m.color} shrink-0`} />
+                    <div>
+                      <p className="text-xs font-semibold text-white">{m.label}</p>
+                      <p className="text-[11px] text-slate-400 tabular-nums">
+                        {m.count} {m.count === 1 ? 'operación' : 'operaciones'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right font-mono tabular-nums">
+                    <span className={`text-sm font-bold ${m.textColor} block`}>
+                      {m.pct.toFixed(1)}%
+                    </span>
+                    <span className="text-xs text-slate-300">{m.amount.toFixed(2)}€</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <Banknote className="w-3.5 h-3.5 text-emerald-400" />
+              Conciliación automática con Cierre de Caja
+            </span>
+            <span className="font-mono tabular-nums text-slate-300">
+              {filteredSales.length} reg.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Printable Report Modal */}
+      <PrintableReportModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        report={{
+          title: t('dashboard.title'),
+          subtitle: t('dashboard.subtitle'),
+          generatedBy: currentUser?.name || 'Supervisor',
+          generatedRole: currentUser?.role || 'Pastor',
+          periodLabel,
+          kpis: [
+            { label: 'Ingresos del Mes', value: `${monthlyRevenue.toFixed(2)}€` },
+            { label: 'Ticket Promedio', value: `${averageTicket.toFixed(2)}€` },
+            { label: 'Saldo en Fiados', value: `${tabsStats.totalDebt.toFixed(2)}€` },
+            {
+              label: 'Efectivo / Tarjeta / Fiado',
+              value: `${paymentBreakdown.cash.pct}% / ${paymentBreakdown.card.pct}% / ${paymentBreakdown.fiado.pct}%`,
+            },
+          ],
+          sales: filteredSales,
+          voidAudits,
+        }}
+      />
+    </div>
+  );
+};

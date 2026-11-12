@@ -1,13 +1,13 @@
 import React from 'react';
-import { usePOSStore } from '../../store/usePOSStore';
+import { usePOSStore, getProductStockInfo } from '../../store/usePOSStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { Search, Plus, Layers, HeartHandshake } from 'lucide-react';
-import { Category } from '../../types';
+import { Search, Plus, AlertTriangle, Ban } from 'lucide-react';
 
 export const ProductCatalog: React.FC = () => {
   const { t } = useLanguage();
   const {
     products,
+    rawMaterials,
     searchQuery,
     setSearchQuery,
     selectedCategory,
@@ -69,20 +69,40 @@ export const ProductCatalog: React.FC = () => {
       {/* Product Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
         {filteredProducts.map((product) => {
+          const stockInfo = getProductStockInfo(product, rawMaterials);
+          const isOut = stockInfo.status === 'out';
+          const isLow = stockInfo.status === 'low';
+
+          const cardBorderClasses = isOut
+            ? 'border-rose-500/60 bg-rose-950/15 hover:border-rose-500 opacity-75'
+            : isLow
+            ? 'border-amber-500/70 ring-1 ring-amber-500/20 bg-slate-900 hover:border-amber-400'
+            : 'border-slate-800 bg-slate-900 hover:border-indigo-500/50';
+
           return (
             <div
               key={product.id}
               onClick={() => addToCart(product)}
-              className="bg-slate-900 border border-slate-800 hover:border-indigo-500/50 rounded-xl p-3 flex flex-col justify-between transition-all duration-150 hover:bg-slate-850 active:scale-98 cursor-pointer group shadow relative overflow-hidden"
+              className={`border rounded-xl p-3 flex flex-col justify-between transition-all duration-150 active:scale-98 cursor-pointer group shadow relative overflow-hidden ${cardBorderClasses}`}
             >
               <div>
-                <div className="flex items-start justify-between gap-1 mb-1">
+                <div className="flex items-start justify-between gap-1.5 mb-1">
                   <h3 className="font-semibold text-xs sm:text-sm text-white group-hover:text-indigo-300 transition line-clamp-1">
                     {product.name}
                   </h3>
-                  {product.badge && (
-                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded font-medium shrink-0">
-                      {product.badge}
+                  {isOut ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded font-semibold shrink-0 tabular-nums">
+                      <Ban className="w-2.5 h-2.5 text-rose-400" />
+                      {t('pos.stock.out')}
+                    </span>
+                  ) : isLow ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-semibold shrink-0 tabular-nums">
+                      <AlertTriangle className="w-2.5 h-2.5 text-amber-400" />
+                      {t('pos.stock.low')} ({stockInfo.availableUnits})
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-mono tabular-nums shrink-0">
+                      {stockInfo.availableUnits} ud.
                     </span>
                   )}
                 </div>
@@ -94,15 +114,21 @@ export const ProductCatalog: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-800/80">
-                <span className="text-sm sm:text-base font-bold text-white">
+                <span className="text-sm sm:text-base font-bold text-white tabular-nums">
                   {product.price.toFixed(2)}€
                 </span>
 
                 <button
                   type="button"
-                  className="p-1.5 rounded-lg bg-indigo-600 text-white group-hover:bg-indigo-500 transition shadow"
+                  className={`p-1.5 rounded-lg text-white transition shadow ${
+                    isOut
+                      ? 'bg-rose-900/50 text-rose-300 cursor-not-allowed'
+                      : isLow
+                      ? 'bg-amber-600 group-hover:bg-amber-500'
+                      : 'bg-indigo-600 group-hover:bg-indigo-500'
+                  }`}
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  {isOut ? <Ban className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>

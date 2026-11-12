@@ -17,13 +17,17 @@ import {
   Calendar,
   ShieldAlert,
   Trash2,
-  FileText,
   Boxes,
   UserCheck,
+  Download,
+  Printer,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
+import {
+  PrintableReportModal,
+  exportSalesHistoryToCSV,
+} from '../common/PrintableReportModal';
 import toast from 'react-hot-toast';
 
 export const SalesHistoryScreen: React.FC = () => {
@@ -36,6 +40,7 @@ export const SalesHistoryScreen: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<'today' | 'all'>('today');
   const [methodFilter, setMethodFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
 
   // Modal de anulación
   const [selectedSaleToVoid, setSelectedSaleToVoid] = useState<Sale | null>(null);
@@ -221,40 +226,69 @@ export const SalesHistoryScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* View Selection Tabs (Tickets vs Auditoría) */}
-        <div className="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setActiveTab('tickets')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition ${
-              activeTab === 'tickets'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
+        {/* Right Actions: Export CSV/Excel, PDF Report, and View Selection Tabs */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Download className="w-3.5 h-3.5 text-emerald-400" />}
+            onClick={() => {
+              exportSalesHistoryToCSV(
+                filteredSales,
+                voidAudits,
+                dateFilter === 'today' ? 'Hoy' : 'Histórico Completo'
+              );
+              toast.success(t('export.csvSuccess'));
+            }}
           >
-            <Receipt className="w-3.5 h-3.5" />
-            {t('history.tab.tickets')}
-            <span className="text-[10px] bg-slate-800 px-1.5 py-0.2 rounded-full">
-              {filteredSales.length}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('audits')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition ${
-              activeTab === 'audits'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            {t('export.csvButton')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Printer className="w-3.5 h-3.5 text-indigo-400" />}
+            onClick={() => {
+              setPdfModalOpen(true);
+              toast.success(t('export.pdfReady'));
+            }}
           >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            {t('history.tab.audits')}
-            {voidAudits.length > 0 && (
-              <span className="text-[10px] bg-rose-950 text-rose-300 border border-rose-800 px-1.5 py-0.2 rounded-full">
-                {voidAudits.length}
+            {t('export.pdfButton')}
+          </Button>
+
+          <div className="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setActiveTab('tickets')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                activeTab === 'tickets'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Receipt className="w-3.5 h-3.5" />
+              {t('history.tab.tickets')}
+              <span className="text-[10px] bg-slate-800 px-1.5 py-0.2 rounded-full tabular-nums">
+                {filteredSales.length}
               </span>
-            )}
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('audits')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                activeTab === 'audits'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              {t('history.tab.audits')}
+              {voidAudits.length > 0 && (
+                <span className="text-[10px] bg-rose-950 text-rose-300 border border-rose-800 px-1.5 py-0.2 rounded-full tabular-nums">
+                  {voidAudits.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -644,6 +678,27 @@ export const SalesHistoryScreen: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Printable PDF Report Modal */}
+      <PrintableReportModal
+        isOpen={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        report={{
+          title: t('history.title'),
+          subtitle: t('history.subtitle'),
+          generatedBy: currentUser?.name || 'Responsable',
+          generatedRole: currentUser?.role || 'Vendedor',
+          periodLabel: dateFilter === 'today' ? 'Hoy' : 'Histórico Completo',
+          kpis: [
+            { label: 'Total Recaudado', value: `${stats.total.toFixed(2)}€` },
+            { label: 'Efectivo', value: `${stats.cash.toFixed(2)}€` },
+            { label: 'Datáfono / TPV', value: `${stats.card.toFixed(2)}€` },
+            { label: 'Fiados / Cuentas', value: `${stats.tabs.toFixed(2)}€` },
+          ],
+          sales: filteredSales,
+          voidAudits,
+        }}
+      />
     </div>
   );
 };

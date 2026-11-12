@@ -2,7 +2,7 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuthStore } from '../../store/useAuthStore';
-import { ShoppingCart, Boxes, Users, Calculator, History, UserCog } from 'lucide-react';
+import { ShoppingCart, Boxes, Users, Calculator, History, UserCog, BarChart3 } from 'lucide-react';
 
 export const Navigation: React.FC = () => {
   const { t } = useLanguage();
@@ -10,8 +10,15 @@ export const Navigation: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
 
-  const isSuperAdmin = currentUser?.role === 'super_admin';
-  const isTesoreriaOrPastor = isSuperAdmin || currentUser?.role === 'Tesorería' || currentUser?.role === 'Pastor';
+  const normRole = (currentUser?.role || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  const isSuperAdmin = normRole === 'super_admin';
+  const isTesoreriaOrPastor =
+    isSuperAdmin || normRole === 'tesoreria' || normRole === 'pastor';
 
   const navItems = [
     {
@@ -21,6 +28,17 @@ export const Navigation: React.FC = () => {
       icon: ShoppingCart,
       allowed: true,
     },
+    ...(isTesoreriaOrPastor
+      ? [
+          {
+            id: 'dashboard',
+            label: t('nav.dashboard'),
+            path: '/dashboard',
+            icon: BarChart3,
+            allowed: true,
+          },
+        ]
+      : []),
     {
       id: 'history',
       label: t('nav.history'),

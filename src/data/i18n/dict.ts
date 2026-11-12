@@ -5,6 +5,7 @@ export const esDict = {
   'app.title': 'ELARX POS',
   'app.tagline': 'Point of Sale & Retail Management',
   'nav.pos': 'Cobro (POS)',
+  'nav.dashboard': 'Dashboard Analítico',
   'nav.inventory': 'Inventario Compuesto',
   'nav.tabs': 'Fiados & Cuentas',
   'nav.closeout': 'Cierre de Caja',
@@ -15,6 +16,30 @@ export const esDict = {
   'online': 'Conectado',
   'offline': 'Modo Offline',
   'install.pwa': 'Instalar Web App',
+
+  // Analytics Dashboard
+  'dashboard.title': 'Dashboard Estadístico & Analítica',
+  'dashboard.subtitle': 'Métricas financieras en tiempo real, rendimiento de productos y control de cuentas',
+  'dashboard.kpi.monthlyRevenue': 'Ingresos Totales del Mes',
+  'dashboard.kpi.avgTicket': 'Ticket Promedio',
+  'dashboard.kpi.pendingTabs': 'Saldo Pendiente en Fiados',
+  'dashboard.chart.salesByDay': 'Ventas por Día',
+  'dashboard.chart.salesByHour': 'Ventas por Franja Horaria',
+  'dashboard.chart.topProducts': 'Top 5 Productos Más Vendidos',
+  'dashboard.chart.paymentBreakdown': 'Desglose por Método de Pago',
+  'dashboard.exportCSV': 'Exportar CSV / Excel',
+  'dashboard.exportPDF': 'Vista Imprimible PDF',
+
+  // Accounting Export & Low Stock Alerts
+  'export.csvButton': 'Exportar CSV / Excel',
+  'export.pdfButton': 'Vista Reporte PDF',
+  'export.csvSuccess': 'Reporte contable descargado en formato CSV / Excel',
+  'export.pdfReady': 'Vista imprimible generada. Lista para guardar como PDF',
+  'export.printNow': 'Imprimir / Guardar PDF',
+  'pos.stock.low': 'Stock Bajo',
+  'pos.stock.out': 'Agotado',
+  'pos.stock.outAlert': 'Producto agotado: sin stock disponible para la venta',
+  'pos.stock.lowAlert': 'Atención: este producto o sus insumos tienen stock bajo',
 
   // Sales History & Void
   'history.title': 'Historial de Ventas',
@@ -183,6 +208,7 @@ export const enDict: Record<keyof typeof esDict, string> = {
   'app.title': 'ELARX POS',
   'app.tagline': 'Point of Sale & Retail Management',
   'nav.pos': 'Register (POS)',
+  'nav.dashboard': 'Analytics Dashboard',
   'nav.inventory': 'Composite Inventory',
   'nav.tabs': 'Tabs & Accounts',
   'nav.closeout': 'Shift Closeout',
@@ -193,6 +219,30 @@ export const enDict: Record<keyof typeof esDict, string> = {
   'online': 'Online',
   'offline': 'Offline Mode',
   'install.pwa': 'Install Web App',
+
+  // Analytics Dashboard
+  'dashboard.title': 'Analytics & Financial Dashboard',
+  'dashboard.subtitle': 'Realtime financial metrics, product performance, and tab balances',
+  'dashboard.kpi.monthlyRevenue': 'Monthly Total Revenue',
+  'dashboard.kpi.avgTicket': 'Average Ticket',
+  'dashboard.kpi.pendingTabs': 'Pending Tab Balance',
+  'dashboard.chart.salesByDay': 'Sales by Day',
+  'dashboard.chart.salesByHour': 'Sales by Time Slot',
+  'dashboard.chart.topProducts': 'Top 5 Best-Selling Products',
+  'dashboard.chart.paymentBreakdown': 'Payment Method Breakdown',
+  'dashboard.exportCSV': 'Export CSV / Excel',
+  'dashboard.exportPDF': 'Printable PDF View',
+
+  // Accounting Export & Low Stock Alerts
+  'export.csvButton': 'Export CSV / Excel',
+  'export.pdfButton': 'PDF Report View',
+  'export.csvSuccess': 'Accounting report downloaded in CSV / Excel format',
+  'export.pdfReady': 'Printable report ready to save as PDF',
+  'export.printNow': 'Print / Save PDF',
+  'pos.stock.low': 'Low Stock',
+  'pos.stock.out': 'Out of Stock',
+  'pos.stock.outAlert': 'Out of stock: no units available for sale',
+  'pos.stock.lowAlert': 'Warning: this product or its recipe ingredients have low stock',
 
   // Sales History & Void
   'history.title': 'Sales History',
