@@ -6,7 +6,7 @@ import { User, Role } from '../../types';
 import toast from 'react-hot-toast';
 
 export const UsersManagementScreen: React.FC = () => {
-  const { users, currentUser, saveUserProfile, loadProfiles } = useAuthStore();
+  const { users, allProfiles, currentUser, saveUserProfile, loadProfiles } = useAuthStore();
   const { t } = useLanguage();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,7 +14,9 @@ export const UsersManagementScreen: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const filteredUsers = users.filter(
+  const profileList = allProfiles.length > 0 ? allProfiles : users;
+
+  const filteredUsers = profileList.filter(
     (u) =>
       u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.role.toLowerCase().includes(searchTerm.toLowerCase())
@@ -51,18 +53,17 @@ export const UsersManagementScreen: React.FC = () => {
     setIsSaving(true);
     const toastId = toast.loading('Guardando usuario en Supabase...');
     try {
-      const userToSave: User = {
-        id: editingUser.id || `usr-${Date.now()}`,
+      const result = await saveUserProfile({
+        id: editingUser.id || '',
         name: editingUser.name.trim(),
         pin: editingUser.pin,
         role: (editingUser.role as Role) || 'Vendedor',
         isActive: editingUser.isActive !== false,
         avatar: editingUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
-      };
-
-      const result = await saveUserProfile(userToSave);
+      });
       toast.dismiss(toastId);
       if (result.success) {
+        await loadProfiles();
         toast.success(t('users.saved'));
         setIsModalOpen(false);
         setEditingUser(null);
@@ -84,10 +85,15 @@ export const UsersManagementScreen: React.FC = () => {
     }
     const updated: User = { ...user, isActive: !user.isActive };
     try {
-      await saveUserProfile(updated);
-      toast.success(`Usuario ${updated.name} ${updated.isActive ? 'activado' : 'desactivado'}`);
+      const result = await saveUserProfile(updated);
+      if (result.success) {
+        await loadProfiles();
+        toast.success(`Usuario ${updated.name} ${updated.isActive ? 'activado' : 'desactivado'}`);
+      } else {
+        toast.error(result.message || 'Error al actualizar el estado del usuario');
+      }
     } catch (err: any) {
-      toast.error('Error al actualizar el estado del usuario');
+      toast.error(err?.message || 'Error al actualizar el estado del usuario');
     }
   };
 
@@ -125,7 +131,7 @@ export const UsersManagementScreen: React.FC = () => {
           />
         </div>
         <div className="text-xs text-slate-400">
-          Total Usuarios: <span className="text-cyan-400 font-mono font-bold">{users.length}</span>
+          Total Usuarios: <span className="text-cyan-400 font-mono font-bold">{profileList.length}</span>
         </div>
       </div>
 

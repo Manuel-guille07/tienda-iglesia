@@ -665,22 +665,19 @@ export const insertCloseouts = insertCloseout;
 
 // --- PROFILES (Usuarios en Supabase) ---
 export function toProfileSnake(user: Record<string, any>) {
-  const fullName = user.full_name || user.fullName || user.name || 'Usuario';
-  const avatarVal = user.avatar && typeof user.avatar === 'string' && user.avatar.trim() !== ''
-    ? user.avatar.trim()
-    : null;
+  const fullName = (user.full_name || user.fullName || user.name || 'Usuario').trim();
+  const validId = cleanUUID(user.id) || generateUUID();
 
   const payload: Record<string, any> = {
+    id: validId,
     full_name: fullName,
     pin: String(user.pin || '0000'),
     role: user.role || 'Vendedor',
     is_active: user.isActive ?? user.is_active ?? true,
-    avatar: avatarVal,
   };
 
-  const validId = cleanUUID(user.id);
-  if (validId) {
-    payload.id = validId;
+  if (user.avatar && typeof user.avatar === 'string' && user.avatar.trim() !== '') {
+    payload.avatar = user.avatar.trim();
   }
 
   return payload;
@@ -716,21 +713,71 @@ export async function getProfiles() {
 
 export async function upsertProfile(profile: Record<string, any>) {
   try {
-    const payload = toProfileSnake(profile);
+    const existingId = cleanUUID(profile.id);
+    const fullName = (profile.full_name || profile.fullName || profile.name || 'Usuario').trim();
 
-    const query = payload.id
-      ? supabase.from('profiles').upsert([payload], { onConflict: 'id' })
-      : supabase.from('profiles').insert([payload]);
+    const baseData: Record<string, any> = {
+      full_name: fullName,
+      pin: String(profile.pin || '0000'),
+      role: profile.role || 'Vendedor',
+      is_active: profile.isActive ?? profile.is_active ?? true,
+    };
 
-    const { data, error } = await query.select();
+    if (profile.avatar && typeof profile.avatar === 'string' && profile.avatar.trim() !== '') {
+      baseData.avatar = profile.avatar.trim();
+    }
+
+    let data: any = null;
+    let error: any = null;
+
+    if (existingId && !profile.isNew) {
+      // Usuario existente: usar .update().eq("id", existingId)
+      const updateRes = await supabase
+        .from('profiles')
+        .update(baseData)
+        .eq('id', existingId)
+        .select();
+
+      data = updateRes.data;
+      error = updateRes.error;
+
+      // Si no existía previamente en la tabla, insertar con su UUID válido
+      if (!error && (!data || data.length === 0)) {
+        const insertRes = await supabase
+          .from('profiles')
+          .insert([{ id: existingId, ...baseData }])
+          .select();
+        data = insertRes.data;
+        error = insertRes.error;
+      }
+    } else {
+      // Usuario nuevo: generar UUID válido con crypto.randomUUID() y usar .insert()
+      const newId = existingId || (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : generateUUID());
+
+      const insertPayload: Record<string, any> = {
+        id: newId,
+        ...baseData,
+      };
+
+      const insertRes = await supabase
+        .from('profiles')
+        .insert([insertPayload])
+        .select();
+
+      data = insertRes.data;
+      error = insertRes.error;
+    }
 
     if (error) {
       console.warn('[Supabase] upsertProfile warning:', error.message);
       if (error.code === '42501' || error.code === '401' || error.message.includes('row-level security') || error.message.includes('policy')) {
-        throw new Error('Error RLS (42501): Permisos insuficientes en la tabla profiles. Verifica las políticas de seguridad o inicia sesión como super_admin.');
+        throw new Error('Error RLS (42501): Permisos insuficientes en la tabla profiles. Verifica las políticas de seguridad.');
       }
       throw error;
     }
+
     return data && data[0] ? fromProfileSnake(data[0]) : null;
   } catch (err: any) {
     console.warn('[Supabase] upsertProfile catch:', err);

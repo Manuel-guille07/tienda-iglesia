@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { User, Role } from '../types';
-import { supabase, createSecondarySupabaseClient } from '../lib/supabase';
-import { getProfiles, upsertProfile } from '../services/db';
+import { supabase } from '../lib/supabase';
+import { getProfiles, upsertProfile, cleanUUID, generateUUID } from '../services/db';
 
 export function getUserInternalEmail(user: User): string {
   if (user.email) return user.email;
@@ -28,7 +28,7 @@ interface AuthState {
   loginWithPin: (pin: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   loginAs: (user: User) => void;
-  saveUserProfile: (userData: Partial<User> & { id: string; name: string; pin: string; role: Role }) => Promise<{ success: boolean; message?: string; profile?: User }>;
+  saveUserProfile: (userData: Partial<User> & { id?: string; name: string; pin: string; role: Role }) => Promise<{ success: boolean; message?: string; profile?: User }>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -194,11 +194,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   saveUserProfile: async (userData) => {
+    const existingValidId = cleanUUID(userData.id);
+    const isNew = !existingValidId;
+    const targetId = existingValidId || (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : generateUUID());
+
     const updatedUser: User = {
-      id: userData.id || `usr-${Date.now()}`,
-      name: userData.name,
-      pin: userData.pin,
-      role: userData.role,
+      id: targetId,
+      name: userData.name.trim(),
+      pin: String(userData.pin || '0000'),
+      role: userData.role || 'Vendedor',
       avatar: userData.avatar || '👤',
       email: userData.email || getUserInternalEmail(userData as User),
       isActive: userData.isActive ?? true,
@@ -206,8 +212,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     let saved: User | null = null;
     try {
-      // 1. Guardar en Supabase tabla 'profiles'
-      saved = await upsertProfile(updatedUser);
+      // 1. Guardar directamente en la tabla 'profiles' de Supabase (Insert o Update según corresponda)
+      saved = await upsertProfile({
+        ...updatedUser,
+        full_name: updatedUser.name,
+        is_active: updatedUser.isActive,
+        isNew,
+      });
     } catch (upsertErr: any) {
       console.error('[saveUserProfile] Error al guardar perfil en Supabase:', upsertErr);
       return {
@@ -219,27 +230,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!saved) {
       return {
         success: false,
-        message: 'No se pudo confirmar la creación del perfil de usuario en Supabase',
+        message: 'No se pudo confirmar el guardado del perfil de usuario en Supabase',
       };
     }
 
-    // 2. Intentar registrar el usuario en Supabase Auth mediante cliente secundario aislado sin persistencia de sesión
-    try {
-      const secondaryAuthClient = createSecondarySupabaseClient();
-      const internalEmail = updatedUser.email;
-      const { error: authError } = await secondaryAuthClient.auth.signUp({
-        email: internalEmail,
-        password: updatedUser.pin,
-      });
-
-      if (authError && !authError.message.toLowerCase().includes('already registered')) {
-        console.warn('[saveUserProfile] Supabase Auth warning:', authError.message);
-      }
-    } catch (authSignUpErr: any) {
-      console.info('[saveUserProfile] Excepción en signUp secundario Supabase Auth:', authSignUpErr);
-    }
-
-    // 3. Recargar lista de perfiles
+    // 2. Recargar inmediatamente la lista de perfiles desde Supabase
     await get().loadProfiles();
 
     if (get().currentUser?.id === updatedUser.id) {
