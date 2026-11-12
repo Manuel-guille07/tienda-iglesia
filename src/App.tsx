@@ -27,13 +27,22 @@ const App: React.FC = () => {
     useTabStore.getState().loadTabs();
     useCloseoutStore.getState().loadCloseouts();
 
-    // 3. Suscripción automática Realtime a postgres_changes (raw_materials y sales)
+    // 3. Suscripción en vivo con Supabase Realtime ('elarx-realtime-sync') para múltiples dispositivos
     const cleanupRealtime = setupRealtimeSync({
       onRawMaterialChange: (material, eventType) => {
         usePOSStore.getState().handleRealtimeRawMaterial(material, eventType);
       },
       onSaleChange: (sale, eventType) => {
         usePOSStore.getState().handleRealtimeSale(sale, eventType);
+      },
+      onTabChange: () => {
+        useTabStore.getState().loadTabs();
+      },
+      onProfileChange: () => {
+        useAuthStore.getState().loadProfiles();
+      },
+      onCloseoutChange: () => {
+        useCloseoutStore.getState().loadCloseouts();
       },
     });
 

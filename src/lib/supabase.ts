@@ -55,8 +55,17 @@ function createMockSupabase(): any {
     return builder;
   };
 
+  const mockChannel: any = {
+    on: () => mockChannel,
+    subscribe: () => mockChannel,
+    unsubscribe: () => Promise.resolve('ok'),
+  };
+
   return {
     from: () => createBuilder(),
+    rpc: () => Promise.resolve({ data: null, error: null }),
+    channel: () => mockChannel,
+    removeChannel: () => Promise.resolve('ok'),
     auth: {
       getUser: () => Promise.resolve({ data: { user: null }, error: null }),
       getSession: () => Promise.resolve({ data: { session: null }, error: null }),

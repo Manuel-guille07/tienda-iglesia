@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { Product, RawMaterial, CartItem, Sale, PaymentMethod, Role, RecipeItem } from '../types';
-import { getRawMaterials, insertRawMaterial, deleteRawMaterial, getSales, insertSale, deleteSale, updateRawMaterialStock } from '../services/db';
+import {
+  getRawMaterials,
+  insertRawMaterial,
+  deleteRawMaterial,
+  getSales,
+  insertSale,
+  deleteSale,
+  decrementStock,
+  incrementStock,
+} from '../services/db';
 import toast from 'react-hot-toast';
 
 export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts: Product[] = []): Product[] {
@@ -277,22 +286,49 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
     const total = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
     const updatedRaw = [...rawMaterials];
-    const affectedRawMaterials: RawMaterial[] = [];
+    const itemsToDecrement: Array<{ id: string; name: string; qty: number }> = [];
 
     cart.forEach((item) => {
-      if (item.product.recipe) {
+      if (item.product.recipe && item.product.recipe.length > 0) {
         item.product.recipe.forEach((ing) => {
+          const qtyToDiscount = ing.quantity * item.quantity;
           const matIndex = updatedRaw.findIndex((m) => m.id === ing.rawMaterialId);
+          const matName = matIndex > -1 ? updatedRaw[matIndex].name : item.product.name;
+
           if (matIndex > -1) {
+            const nextStock = Math.max(0, updatedRaw[matIndex].currentStock - qtyToDiscount);
             updatedRaw[matIndex] = {
               ...updatedRaw[matIndex],
-              currentStock: Math.max(0, updatedRaw[matIndex].currentStock - ing.quantity * item.quantity),
+              currentStock: nextStock,
+              isOutOfStock: nextStock <= 0,
             };
-            if (!affectedRawMaterials.some((m) => m.id === updatedRaw[matIndex].id)) {
-              affectedRawMaterials.push(updatedRaw[matIndex]);
-            }
+          }
+
+          const existing = itemsToDecrement.find((d) => d.id === ing.rawMaterialId);
+          if (existing) {
+            existing.qty += qtyToDiscount;
+          } else {
+            itemsToDecrement.push({ id: ing.rawMaterialId, name: matName, qty: qtyToDiscount });
           }
         });
+      } else {
+        const qtyToDiscount = item.quantity;
+        const matIndex = updatedRaw.findIndex((m) => m.id === item.product.id);
+        if (matIndex > -1) {
+          const nextStock = Math.max(0, updatedRaw[matIndex].currentStock - qtyToDiscount);
+          updatedRaw[matIndex] = {
+            ...updatedRaw[matIndex],
+            currentStock: nextStock,
+            isOutOfStock: nextStock <= 0,
+          };
+        }
+
+        const existing = itemsToDecrement.find((d) => d.id === item.product.id);
+        if (existing) {
+          existing.qty += qtyToDiscount;
+        } else {
+          itemsToDecrement.push({ id: item.product.id, name: item.product.name, qty: qtyToDiscount });
+        }
       }
     });
 
@@ -321,7 +357,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       cart: [],
     });
 
-    // Guardar en Supabase: insertar en sales y luego actualizar stock en raw_materials
+    // Guardar en Supabase: insertar en sales y descontar stock de forma atómica con RPC 'decrement_stock'
     insertSale({
       total,
       payment_method: params.paymentMethod,
@@ -337,14 +373,16 @@ export const usePOSStore = create<POSState>((set, get) => ({
           }));
         }
 
-        if (affectedRawMaterials.length > 0) {
-          for (const mat of affectedRawMaterials) {
-            const successUpdate = await updateRawMaterialStock(mat.id, mat.currentStock);
-            if (!successUpdate) {
-              console.error(`Error al actualizar stock de insumo ${mat.id} en Supabase`);
-              toast.error(`Error crítico: No se pudo actualizar el stock en Supabase para ${mat.name}`);
+        if (itemsToDecrement.length > 0) {
+          for (const entry of itemsToDecrement) {
+            try {
+              await decrementStock(entry.id, entry.qty);
+            } catch (rpcError: any) {
+              console.error(`Error en RPC decrement_stock para ${entry.id}:`, rpcError);
+              toast.error(`Error al descontar stock en Supabase para ${entry.name}`);
             }
           }
+          await get().loadRawMaterials();
         }
       })
       .catch((error) => {
@@ -547,30 +585,39 @@ export const usePOSStore = create<POSState>((set, get) => ({
     }
 
     const updatedRaw = [...rawMaterials];
-    const restoredMaterials: RawMaterial[] = [];
+    const itemsToIncrement: Array<{ id: string; name: string; qty: number }> = [];
 
     // Restituir insumos si la venta tiene items asociados
     if (targetSale.items && targetSale.items.length > 0) {
       targetSale.items.forEach((item) => {
         if (item.product?.recipe && item.product.recipe.length > 0) {
           item.product.recipe.forEach((ing) => {
+            const returnedQty = ing.quantity * item.quantity;
             const idx = updatedRaw.findIndex((m) => m.id === ing.rawMaterialId);
+            const matName = idx > -1 ? updatedRaw[idx].name : item.product.name;
+
             if (idx > -1) {
-              const returnedQty = ing.quantity * item.quantity;
               const newStock = updatedRaw[idx].currentStock + returnedQty;
               updatedRaw[idx] = {
                 ...updatedRaw[idx],
                 currentStock: newStock,
                 isOutOfStock: false,
               };
-              if (!restoredMaterials.some((m) => m.id === updatedRaw[idx].id)) {
-                restoredMaterials.push(updatedRaw[idx]);
-              }
+            }
+
+            const existing = itemsToIncrement.find((d) => d.id === ing.rawMaterialId);
+            if (existing) {
+              existing.qty += returnedQty;
+            } else {
+              itemsToIncrement.push({ id: ing.rawMaterialId, name: matName, qty: returnedQty });
             }
           });
         } else {
           // Si es un producto directo mapeado al insumo
           const idx = updatedRaw.findIndex((m) => m.id === item.product?.id || m.name.toLowerCase() === item.product?.name.toLowerCase());
+          const targetId = idx > -1 ? updatedRaw[idx].id : item.product?.id;
+          const targetName = idx > -1 ? updatedRaw[idx].name : (item.product?.name || 'Producto');
+
           if (idx > -1) {
             const newStock = updatedRaw[idx].currentStock + item.quantity;
             updatedRaw[idx] = {
@@ -578,8 +625,14 @@ export const usePOSStore = create<POSState>((set, get) => ({
               currentStock: newStock,
               isOutOfStock: false,
             };
-            if (!restoredMaterials.some((m) => m.id === updatedRaw[idx].id)) {
-              restoredMaterials.push(updatedRaw[idx]);
+          }
+
+          if (targetId) {
+            const existing = itemsToIncrement.find((d) => d.id === targetId);
+            if (existing) {
+              existing.qty += item.quantity;
+            } else {
+              itemsToIncrement.push({ id: targetId, name: targetName, qty: item.quantity });
             }
           }
         }
@@ -595,13 +648,22 @@ export const usePOSStore = create<POSState>((set, get) => ({
       products: updatedProducts,
     });
 
-    // 2. Ejecutar UPDATE en raw_materials en Supabase sumando el stock restituido
-    for (const mat of restoredMaterials) {
-      await updateRawMaterialStock(mat.id, mat.currentStock);
+    // 2. Ejecutar RPC atómico 'increment_stock' en Supabase por cada insumo/producto devuelto
+    for (const entry of itemsToIncrement) {
+      try {
+        await incrementStock(entry.id, entry.qty);
+      } catch (rpcError: any) {
+        console.error(`Error en RPC increment_stock para ${entry.id}:`, rpcError);
+        toast.error(`Error al restaurar stock en Supabase para ${entry.name}`);
+      }
     }
 
-    // 3. Eliminar la venta en Supabase
-    await deleteSale(saleId);
+    // 3. Eliminar la venta en Supabase y refrescar inventario
+    const deleted = await deleteSale(saleId);
+    if (!deleted) {
+      toast.error('Error al eliminar la venta anulada en Supabase');
+    }
+    await get().loadRawMaterials();
 
     return { success: true };
   },

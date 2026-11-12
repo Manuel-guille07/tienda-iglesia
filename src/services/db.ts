@@ -393,6 +393,60 @@ export async function updateRawMaterialStock(materialId: string, newStock: numbe
 }
 
 /**
+ * Descuenta unidades de stock de forma atómica en Supabase mediante RPC 'decrement_stock'
+ */
+export async function decrementStock(p_item_id: string, p_qty: number): Promise<boolean> {
+  try {
+    const validId = cleanUUID(p_item_id);
+    if (!validId) return false;
+
+    const qty = Number(p_qty);
+    if (isNaN(qty) || qty <= 0) return false;
+
+    const { error } = await supabase.rpc('decrement_stock', {
+      p_item_id: validId,
+      p_qty: qty,
+    });
+
+    if (error) {
+      console.warn('[Supabase] decrement_stock RPC warning:', error);
+      throw error;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] decrementStock catch:', err);
+    throw err;
+  }
+}
+
+/**
+ * Incrementa/restaura unidades de stock de forma atómica en Supabase mediante RPC 'increment_stock'
+ */
+export async function incrementStock(p_item_id: string, p_qty: number): Promise<boolean> {
+  try {
+    const validId = cleanUUID(p_item_id);
+    if (!validId) return false;
+
+    const qty = Number(p_qty);
+    if (isNaN(qty) || qty <= 0) return false;
+
+    const { error } = await supabase.rpc('increment_stock', {
+      p_item_id: validId,
+      p_qty: qty,
+    });
+
+    if (error) {
+      console.warn('[Supabase] increment_stock RPC warning:', error);
+      throw error;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] incrementStock catch:', err);
+    throw err;
+  }
+}
+
+/**
  * Elimina un insumo/producto directamente de Supabase
  */
 export async function deleteRawMaterial(materialId: string): Promise<boolean> {

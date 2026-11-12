@@ -5,13 +5,21 @@ import { RawMaterial, Sale } from '../types';
 export interface RealtimeCallbacks {
   onRawMaterialChange?: (material: RawMaterial, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void;
   onSaleChange?: (sale: Partial<Sale>, eventType: 'INSERT' | 'UPDATE' | 'DELETE') => void;
+  onTabChange?: () => void;
+  onProfileChange?: () => void;
+  onCloseoutChange?: () => void;
 }
 
 let activeChannel: ReturnType<typeof supabase.channel> | null = null;
 
 /**
  * Suscribe la aplicación a los eventos en tiempo real de Supabase (postgres_changes)
- * para mantener sincronizadas las tablas de raw_materials y sales.
+ * en el canal 'elarx-realtime-sync' para sincronizar múltiples dispositivos sin recargar (F5):
+ * - raw_materials (inventario / productos)
+ * - sales (ventas POS)
+ * - tabs y tab_payments (fiados y abonos)
+ * - profiles (usuarios y roles)
+ * - closeouts y audit_logs (cierres e incidencias)
  */
 export function setupRealtimeSync(callbacks: RealtimeCallbacks) {
   if (activeChannel) {
@@ -23,7 +31,7 @@ export function setupRealtimeSync(callbacks: RealtimeCallbacks) {
   }
 
   const channel = supabase
-    .channel('elarx-pos-realtime')
+    .channel('elarx-realtime-sync')
     .on(
       'postgres_changes' as any,
       { event: '*', schema: 'public', table: 'raw_materials' },
@@ -52,6 +60,41 @@ export function setupRealtimeSync(callbacks: RealtimeCallbacks) {
           const mapped = fromSaleSnake(payload.new);
           callbacks.onSaleChange(mapped, payload.eventType as 'INSERT' | 'UPDATE');
         }
+      }
+    )
+    .on(
+      'postgres_changes' as any,
+      { event: '*', schema: 'public', table: 'tabs' },
+      () => {
+        callbacks.onTabChange?.();
+      }
+    )
+    .on(
+      'postgres_changes' as any,
+      { event: '*', schema: 'public', table: 'tab_payments' },
+      () => {
+        callbacks.onTabChange?.();
+      }
+    )
+    .on(
+      'postgres_changes' as any,
+      { event: '*', schema: 'public', table: 'profiles' },
+      () => {
+        callbacks.onProfileChange?.();
+      }
+    )
+    .on(
+      'postgres_changes' as any,
+      { event: '*', schema: 'public', table: 'closeouts' },
+      () => {
+        callbacks.onCloseoutChange?.();
+      }
+    )
+    .on(
+      'postgres_changes' as any,
+      { event: '*', schema: 'public', table: 'audit_logs' },
+      () => {
+        callbacks.onCloseoutChange?.();
       }
     )
     .subscribe();
