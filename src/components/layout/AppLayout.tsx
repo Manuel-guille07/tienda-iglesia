@@ -10,13 +10,13 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div
-      className={`min-h-screen flex flex-col antialiased transition-colors duration-200 ${
+      className={`min-h-screen w-full max-w-full overflow-x-hidden flex flex-col antialiased transition-colors duration-200 ${
         isDark ? 'bg-[#0E0C0B] text-[#F4F0EA]' : 'bg-[#EFECE6] text-[#141210]'
       }`}
     >
       <Header />
       <Navigation />
-      <main className="flex-1 pb-28 md:pb-10 overflow-x-hidden">
+      <main className="flex-1 w-full max-w-full overflow-x-hidden pb-24 lg:pb-10">
         <Outlet />
       </main>
     </div>

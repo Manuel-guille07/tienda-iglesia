@@ -143,11 +143,11 @@ const App: React.FC = () => {
                 }
               />
 
-              {/* Gestión de Usuarios (RBAC: super_admin) */}
+              {/* Gestión de Usuarios (RBAC: Pastor, Tesorería, super_admin) */}
               <Route
                 path="/usuarios"
                 element={
-                  <ProtectedRoute allowedRoles={['super_admin']}>
+                  <ProtectedRoute allowedRoles={['Pastor', 'Tesorería', 'super_admin']}>
                     <UsersManagementScreen />
                   </ProtectedRoute>
                 }

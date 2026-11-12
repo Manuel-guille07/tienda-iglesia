@@ -34,7 +34,11 @@ html[data-theme="dark"] {
 }
 
 @layer base {
+  html,
   body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     background-color: var(--ql-bg-app);
     color: var(--ql-text-primary);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";

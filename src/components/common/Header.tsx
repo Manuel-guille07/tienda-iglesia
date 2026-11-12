@@ -32,19 +32,23 @@ export const Header: React.FC = () => {
     };
   }, []);
 
+  const firstName = currentUser?.name
+    ? currentUser.name.trim().split(/\s+/)[0]
+    : '';
+
   return (
     <header
-      className={`sticky top-0 z-40 px-4 py-3 sm:px-6 border-b transition-colors duration-200 ${
+      className={`w-full max-w-full overflow-x-hidden sticky top-0 z-40 px-2.5 py-2.5 sm:px-6 sm:py-3 border-b transition-colors duration-200 ${
         isDark
           ? 'bg-[#171412]/95 border-[#2A2420] text-[#F4F0EA]'
           : 'bg-[#FAF8F5]/95 border-[#E2DDD5] text-[#141210]'
       } backdrop-blur-md`}
     >
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-        {/* Clean Architectural Brand Mark */}
-        <div className="flex items-center gap-3">
+      <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-2 min-w-0">
+        {/* Fila Superior Izquierda: Logo ELARX */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
           <div
-            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 font-serif text-base font-bold tracking-tight ${
+            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 font-serif text-sm sm:text-base font-bold tracking-tight ${
               isDark
                 ? 'bg-[#EFECE6] text-[#141210]'
                 : 'bg-[#141210] text-[#FAF8F5]'
@@ -52,12 +56,12 @@ export const Header: React.FC = () => {
           >
             EX
           </div>
-          <div>
-            <span className="text-lg font-semibold tracking-tight block leading-none">
+          <div className="min-w-0">
+            <span className="text-base sm:text-lg font-semibold tracking-tight block leading-none">
               ELARX
             </span>
             <span
-              className={`text-xs font-medium block mt-1 ${
+              className={`hidden sm:block text-xs font-medium mt-1 ${
                 isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
               }`}
             >
@@ -66,22 +70,25 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Controls: Offline alert (only if offline), Theme Toggle (Light/Dark), User Profile & Logout */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Fila Superior Derecha: Controles Compactos (Tema Claro/Oscuro, Usuario truncado y Botón Salir visible) */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink">
           {!isOnline && (
-            <div className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-500 border border-rose-500/30">
-              <WifiOff className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('offline')}</span>
+            <div
+              title={t('offline')}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-500 border border-rose-500/30 shrink-0"
+            >
+              <WifiOff className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden lg:inline">{t('offline')}</span>
             </div>
           )}
 
-          {/* Dual Theme Switcher (Light: Piedra Alabastro / Dark: Obsidiana Café) */}
+          {/* Interruptor Tema Claro / Oscuro */}
           <button
             type="button"
             onClick={toggleTheme}
             aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
             title={isDark ? 'Modo Claro' : 'Modo Oscuro'}
-            className={`min-h-[48px] px-4 rounded-full border flex items-center gap-2 text-sm font-medium transition cursor-pointer select-none ${
+            className={`h-10 w-10 sm:h-11 sm:w-auto sm:px-3.5 rounded-full border flex items-center justify-center gap-2 text-xs sm:text-sm font-medium transition cursor-pointer select-none shrink-0 ${
               isDark
                 ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] hover:border-[#3D352F]'
                 : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] hover:border-[#CFC8BC]'
@@ -100,23 +107,24 @@ export const Header: React.FC = () => {
             )}
           </button>
 
-          {/* Active User & Logout */}
+          {/* Insignia Compacta del Usuario Activo + Botón Salir */}
           {currentUser && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <div
-                className={`min-h-[48px] flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border ${
+                className={`h-10 sm:h-11 flex items-center gap-1.5 sm:gap-2.5 px-2.5 sm:px-3.5 rounded-full border min-w-0 ${
                   isDark
                     ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA]'
                     : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]'
                 }`}
               >
                 <UserAvatarIcon icon={currentUser.avatar} size="sm" />
-                <div className="text-left pr-1">
-                  <p className="text-sm font-semibold leading-tight truncate max-w-[110px] sm:max-w-[160px]">
-                    {currentUser.name}
+                <div className="text-left min-w-0">
+                  <p className="text-xs sm:text-sm font-semibold leading-tight truncate max-w-[78px] sm:max-w-[110px] md:max-w-[150px]">
+                    <span className="sm:hidden">{firstName}</span>
+                    <span className="hidden sm:inline">{currentUser.name}</span>
                   </p>
                   <p
-                    className={`text-xs leading-tight capitalize ${
+                    className={`hidden sm:block text-[11px] leading-tight capitalize truncate ${
                       isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
                     }`}
                   >
@@ -130,14 +138,14 @@ export const Header: React.FC = () => {
                 onClick={logout}
                 title={t('nav.logout')}
                 aria-label={t('nav.logout')}
-                className={`min-h-[48px] min-w-[48px] px-3.5 rounded-full border flex items-center justify-center gap-1.5 text-sm font-medium transition cursor-pointer ${
+                className={`h-10 sm:h-11 px-2.5 sm:px-3.5 rounded-full border flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold transition cursor-pointer shrink-0 ${
                   isDark
                     ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] hover:bg-rose-950/60 hover:border-rose-700/60 hover:text-rose-200'
                     : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] hover:bg-rose-100 hover:border-rose-300 hover:text-rose-900'
                 }`}
               >
                 <LogOut className="w-4 h-4 shrink-0" />
-                <span className="hidden md:inline">Salir</span>
+                <span>Salir</span>
               </button>
             </div>
           )}
