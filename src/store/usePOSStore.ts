@@ -291,21 +291,37 @@ export const usePOSStore = create<POSState>((set, get) => ({
   },
 
   updateQuantity: (productId, quantity) => {
-    if (quantity <= 0) {
+    if (!Number.isFinite(quantity) || isNaN(quantity)) {
+      toast.error('Cantidad inválida');
+      return;
+    }
+    const cleanQty = Math.floor(quantity);
+    if (cleanQty <= 0) {
       get().removeFromCart(productId);
       return;
     }
-    set({
-      cart: get().cart.map((item) =>
-        item.product.id === productId ? { ...item, quantity } : item
-      ),
-    });
+
+    const currentCart = get().cart;
+    const currentItem = currentCart.find((it) => it.product.id === productId);
+    const nextCart = currentCart.map((item) =>
+      item.product.id === productId ? { ...item, quantity: cleanQty } : item
+    );
+
+    if (currentItem && cleanQty > currentItem.quantity) {
+      const availability = get().checkStockAvailability(nextCart);
+      if (!availability.available) {
+        toast.error(`Stock máximo alcanzado: ${availability.missing.join(', ')}`);
+        return;
+      }
+    }
+
+    set({ cart: nextCart });
   },
 
   updateItemNote: (productId, notes) => {
     set({
       cart: get().cart.map((item) =>
-        item.product.id === productId ? { ...item, notes } : item
+        item.product.id === productId ? { ...item, notes: notes.slice(0, 160) } : item
       ),
     });
   },

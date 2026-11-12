@@ -29,40 +29,64 @@ export const InventoryScreen: React.FC = () => {
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [editingRecipeProduct, setEditingRecipeProduct] = useState<Product | null>(null);
 
-  // State for recipe deletion modal
+  // State for recipe & material deletion modals and idempotency lock
   const [confirmDeleteRecipeProd, setConfirmDeleteRecipeProd] = useState<Product | null>(null);
+  const [confirmDeleteMaterial, setConfirmDeleteMaterial] = useState<RawMaterial | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const mat = rawMaterials.find((m) => m.id === selectedId);
 
   const handleRestock = () => {
-    if (selectedId && amount > 0) {
+    if (isSubmitting) return;
+    if (!selectedId) return;
+    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+      toast.error('La cantidad a reponer debe ser un número válido mayor a 0');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
       restockRawMaterial(selectedId, amount);
       toast.success(t('toast.stockUpdated'));
       setSelectedId(null);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDeleteMaterial = async (material: RawMaterial) => {
-    if (window.confirm(`¿Estás seguro de eliminar "${material.name}" de Supabase e inventario?`)) {
-      const toastId = toast.loading('Eliminando de Supabase...');
-      const success = await deleteRawMaterialAction(material.id);
+  const handleConfirmDeleteMaterial = async () => {
+    if (isSubmitting || !confirmDeleteMaterial) return;
+    setIsSubmitting(true);
+    const toastId = toast.loading('Eliminando de Supabase...');
+    try {
+      const success = await deleteRawMaterialAction(confirmDeleteMaterial.id);
       toast.dismiss(toastId);
       if (success) {
-        toast.success(`"${material.name}" eliminado correctamente`);
+        toast.success(`"${confirmDeleteMaterial.name}" eliminado correctamente`);
       }
+      setConfirmDeleteMaterial(null);
+    } catch {
+      toast.dismiss(toastId);
+      toast.error('Error de red al eliminar el insumo');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleConfirmDeleteRecipe = async () => {
-    if (!confirmDeleteRecipeProd) return;
-    const prodName = confirmDeleteRecipeProd.name;
-    const success = await deleteProductRecipe(confirmDeleteRecipeProd.id);
-    if (success) {
-      toast.success(`Receta de "${prodName}" eliminada con éxito`);
-    } else {
-      toast.error('No se pudo eliminar la receta');
+    if (isSubmitting || !confirmDeleteRecipeProd) return;
+    setIsSubmitting(true);
+    try {
+      const prodName = confirmDeleteRecipeProd.name;
+      const success = await deleteProductRecipe(confirmDeleteRecipeProd.id);
+      if (success) {
+        toast.success(`Receta de "${prodName}" eliminada con éxito`);
+      } else {
+        toast.error('No se pudo eliminar la receta');
+      }
+      setConfirmDeleteRecipeProd(null);
+    } finally {
+      setIsSubmitting(false);
     }
-    setConfirmDeleteRecipeProd(null);
   };
 
   const getCategoryLabel = (cat?: string) => {
@@ -247,7 +271,7 @@ export const InventoryScreen: React.FC = () => {
                         <span>Editar</span>
                       </button>
                       <button
-                        onClick={() => handleDeleteMaterial(m)}
+                        onClick={() => setConfirmDeleteMaterial(m)}
                         className="p-1.5 bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
                         title="Eliminar insumo / producto"
                       >
@@ -327,26 +351,84 @@ export const InventoryScreen: React.FC = () => {
       )}
 
       {/* Reponer Stock Modal */}
-      <Modal isOpen={!!selectedId} onClose={() => setSelectedId(null)} title={`Reponer ${mat?.name || ''}`}>
+      <Modal
+        isOpen={!!selectedId}
+        onClose={() => !isSubmitting && setSelectedId(null)}
+        title={`Reponer ${mat?.name || ''}`}
+      >
         <div className="space-y-3">
           <input
             type="number"
             min="1"
-            value={amount}
-            onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 0))}
+            value={Number.isFinite(amount) ? amount || '' : ''}
+            onChange={(e) => {
+              const parsed = parseFloat(e.target.value);
+              setAmount(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+            }}
             className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-lg font-bold text-white focus:outline-none focus:border-indigo-500"
           />
-          <Button variant="success" size="lg" className="w-full font-bold" onClick={handleRestock}>
+          <Button
+            variant="success"
+            size="lg"
+            disabled={isSubmitting || !Number.isFinite(amount) || amount <= 0}
+            isLoading={isSubmitting}
+            className="w-full font-bold"
+            onClick={handleRestock}
+          >
             Confirmar Reposición
           </Button>
         </div>
       </Modal>
 
+      {/* Modal Confirmación Eliminación de Insumo / Producto */}
+      {confirmDeleteMaterial && (
+        <Modal
+          isOpen={Boolean(confirmDeleteMaterial)}
+          onClose={() => !isSubmitting && setConfirmDeleteMaterial(null)}
+          title="Eliminar Insumo / Producto"
+        >
+          <div className="space-y-4 text-slate-200">
+            <div className="flex items-start gap-3 bg-rose-950/30 border border-rose-800/50 p-3.5 rounded-xl">
+              <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  ¿Estás seguro de eliminar "{confirmDeleteMaterial.name}" de Supabase e inventario?
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Esta acción eliminará permanentemente el registro de la tabla de inventario.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                disabled={isSubmitting}
+                className="flex-1"
+                onClick={() => setConfirmDeleteMaterial(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                disabled={isSubmitting}
+                isLoading={isSubmitting}
+                className="flex-1 font-bold"
+                icon={<Trash2 className="w-4 h-4" />}
+                onClick={handleConfirmDeleteMaterial}
+              >
+                Confirmar Eliminación
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Modal Confirmación Eliminación de Receta */}
       {confirmDeleteRecipeProd && (
         <Modal
           isOpen={Boolean(confirmDeleteRecipeProd)}
-          onClose={() => setConfirmDeleteRecipeProd(null)}
+          onClose={() => !isSubmitting && setConfirmDeleteRecipeProd(null)}
           title="Eliminar Receta"
         >
           <div className="space-y-4 text-slate-200">
@@ -365,19 +447,22 @@ export const InventoryScreen: React.FC = () => {
             <div className="flex gap-2 pt-2">
               <Button
                 variant="outline"
+                disabled={isSubmitting}
                 className="flex-1"
                 onClick={() => setConfirmDeleteRecipeProd(null)}
               >
                 Cancelar
               </Button>
-              <button
-                type="button"
+              <Button
+                variant="danger"
+                disabled={isSubmitting}
+                isLoading={isSubmitting}
+                className="flex-1 font-bold"
+                icon={<Trash2 className="w-4 h-4" />}
                 onClick={handleConfirmDeleteRecipe}
-                className="flex-1 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
-                <span>Confirmar Eliminación</span>
-              </button>
+                Confirmar Eliminación
+              </Button>
             </div>
           </div>
         </Modal>

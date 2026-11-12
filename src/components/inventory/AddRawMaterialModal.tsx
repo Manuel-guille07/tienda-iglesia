@@ -27,8 +27,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
   const [category, setCategory] = useState<Category>('cafeteria');
   const [isSellable, setIsSellable] = useState<boolean>(true);
   const [isQuickAccess, setIsQuickAccess] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
+    setIsSubmitting(false);
     if (initialMaterial) {
       setName(initialMaterial.name);
       setUnit(initialMaterial.unit || 'unidades');
@@ -54,47 +56,75 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
+    if (isSubmitting) return;
+
+    const cleanName = name.trim();
+    if (!cleanName) {
       toast.error('Por favor introduce el nombre del insumo o producto');
       return;
     }
 
-    if (initialMaterial) {
-      updateRawMaterial(initialMaterial.id, {
-        name: name.trim(),
-        unit,
-        currentStock: Number(currentStock) || 0,
-        minStock: Number(minStock) || 0,
-        costPerUnit: Number(costPerUnit) || 0,
-        price: isSellable ? (Number(price) || 0) : undefined,
-        category,
-        isSellable,
-        isQuickAccess,
-      });
-      toast.success(`Producto "${name.trim()}" actualizado correctamente`);
-    } else {
-      addRawMaterial({
-        name: name.trim(),
-        unit,
-        currentStock: Number(currentStock) || 0,
-        minStock: Number(minStock) || 0,
-        costPerUnit: Number(costPerUnit) || 0,
-        price: isSellable ? (Number(price) || 0) : undefined,
-        category,
-        isSellable,
-        isQuickAccess,
-        isOutOfStock: false,
-      });
-      toast.success(`Insumo "${name.trim()}" añadido correctamente`);
+    if (
+      !Number.isFinite(currentStock) ||
+      isNaN(currentStock) ||
+      currentStock < 0 ||
+      !Number.isFinite(minStock) ||
+      isNaN(minStock) ||
+      minStock < 0 ||
+      !Number.isFinite(costPerUnit) ||
+      isNaN(costPerUnit) ||
+      costPerUnit < 0
+    ) {
+      toast.error('El stock, alerta mínima y coste unitario deben ser números válidos mayores o iguales a 0');
+      return;
     }
 
-    onClose();
+    if (isSellable && (!Number.isFinite(price) || isNaN(price) || price <= 0)) {
+      toast.error('El precio de venta para productos visibles en POS debe ser mayor a 0.00€');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (initialMaterial) {
+        updateRawMaterial(initialMaterial.id, {
+          name: cleanName,
+          unit,
+          currentStock: Math.max(0, Number(currentStock)),
+          minStock: Math.max(0, Number(minStock)),
+          costPerUnit: Math.max(0, Number(costPerUnit)),
+          price: isSellable ? Math.max(0.01, Number(price)) : undefined,
+          category,
+          isSellable,
+          isQuickAccess,
+        });
+        toast.success(`Producto "${cleanName}" actualizado correctamente`);
+      } else {
+        addRawMaterial({
+          name: cleanName,
+          unit,
+          currentStock: Math.max(0, Number(currentStock)),
+          minStock: Math.max(0, Number(minStock)),
+          costPerUnit: Math.max(0, Number(costPerUnit)),
+          price: isSellable ? Math.max(0.01, Number(price)) : undefined,
+          category,
+          isSellable,
+          isQuickAccess,
+          isOutOfStock: false,
+        });
+        toast.success(`Insumo "${cleanName}" añadido correctamente`);
+      }
+
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => !isSubmitting && onClose()}
       title={initialMaterial ? `Editar: ${initialMaterial.name}` : 'Añadir Nuevo Insumo / Producto Directo'}
     >
       <form onSubmit={handleSubmit} className="space-y-3.5 text-slate-200">
@@ -154,8 +184,11 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               type="number"
               step="0.01"
               min="0"
-              value={costPerUnit}
-              onChange={(e) => setCostPerUnit(parseFloat(e.target.value) || 0)}
+              value={Number.isFinite(costPerUnit) ? costPerUnit : ''}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value);
+                setCostPerUnit(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+              }}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -167,10 +200,13 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             <input
               type="number"
               step="0.05"
-              min="0"
+              min="0.01"
               disabled={!isSellable}
-              value={price}
-              onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+              value={Number.isFinite(price) ? price : ''}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value);
+                setPrice(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+              }}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold text-emerald-400 focus:outline-none focus:border-indigo-500 disabled:opacity-40"
             />
           </div>
@@ -183,8 +219,11 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               type="number"
               step="1"
               min="0"
-              value={currentStock}
-              onChange={(e) => setCurrentStock(parseFloat(e.target.value) || 0)}
+              value={Number.isFinite(currentStock) ? currentStock : ''}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value);
+                setCurrentStock(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+              }}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -195,8 +234,11 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               type="number"
               step="1"
               min="0"
-              value={minStock}
-              onChange={(e) => setMinStock(parseFloat(e.target.value) || 0)}
+              value={Number.isFinite(minStock) ? minStock : ''}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value);
+                setMinStock(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+              }}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -240,10 +282,16 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
         </div>
 
         <div className="flex gap-2 pt-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+          <Button type="button" variant="outline" disabled={isSubmitting} className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
-          <Button type="submit" variant="primary" className="flex-1 font-bold">
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={isSubmitting}
+            isLoading={isSubmitting}
+            className="flex-1 font-bold"
+          >
             {initialMaterial ? 'Guardar Cambios' : 'Guardar Insumo / Producto'}
           </Button>
         </div>

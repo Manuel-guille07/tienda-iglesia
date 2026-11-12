@@ -41,8 +41,13 @@ export const ChangeCalculator: React.FC<ChangeCalculatorProps> = ({
           <input
             type="number"
             step="0.10"
-            value={tendered || ''}
-            onChange={(e) => onTenderedChange(parseFloat(e.target.value) || 0)}
+            min="0"
+            value={Number.isFinite(tendered) ? tendered || '' : ''}
+            onChange={(e) => {
+              const parsed = parseFloat(e.target.value);
+              const safeVal = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
+              onTenderedChange(safeVal);
+            }}
             className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm font-bold text-white"
           />
         </div>

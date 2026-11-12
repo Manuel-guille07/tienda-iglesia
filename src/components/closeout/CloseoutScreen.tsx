@@ -32,6 +32,7 @@ export const CloseoutScreen: React.FC = () => {
   const [counted, setCounted] = useState<number>(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [isClosingShift, setIsClosingShift] = useState(false);
 
   // Obtener cobros y abonos de fiados
   const allTabPayments = customers.flatMap((c) =>
@@ -264,11 +265,22 @@ export const CloseoutScreen: React.FC = () => {
           counted={counted}
           onCountedChange={setCounted}
           difference={difference}
+          isSubmitting={isClosingShift}
           onConfirmClose={() => {
-            recordShiftClose(getShift());
-            setCounted(0);
-            usePOSStore.setState({ cart: [] });
-            toast.success('Cierre de caja completado. Estado de caja reiniciado a 0.00€');
+            if (isClosingShift) return;
+            if (!Number.isFinite(counted) || isNaN(counted) || counted < 0) {
+              toast.error('Introduce un monto de efectivo contado válido mayor o igual a 0');
+              return;
+            }
+            setIsClosingShift(true);
+            try {
+              recordShiftClose(getShift());
+              setCounted(0);
+              usePOSStore.setState({ cart: [] });
+              toast.success('Cierre de caja completado. Estado de caja reiniciado a 0.00€');
+            } finally {
+              setIsClosingShift(false);
+            }
           }}
         />
         <IncidentListPanel incidents={incidents} onOpenNew={() => setModalOpen(true)} />

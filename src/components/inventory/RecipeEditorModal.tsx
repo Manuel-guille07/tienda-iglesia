@@ -16,8 +16,12 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
   const { products, rawMaterials, updateProductRecipe, deleteProductRecipe } = usePOSStore();
   const [selectedId, setSelectedId] = useState('');
   const [items, setItems] = useState<RecipeItem[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
+    setIsSubmitting(false);
+    setConfirmDelete(false);
     if (product) {
       setSelectedId(product.id);
       setItems(product.recipe ? [...product.recipe] : []);
@@ -36,32 +40,53 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
   };
 
   const handleSave = () => {
+    if (isSubmitting) return;
     if (!selectedId) return toast.error('Selecciona un producto');
     if (items.length === 0) return toast.error('Agrega al menos un insumo');
     for (const it of items) {
-      if (it.quantity <= 0) return toast.error('La cantidad debe ser mayor a 0');
+      if (!Number.isFinite(it.quantity) || isNaN(it.quantity) || it.quantity <= 0) {
+        return toast.error('La cantidad de cada ingrediente debe ser un número válido mayor a 0');
+      }
     }
-    updateProductRecipe(selectedId, items);
-    toast.success('Receta guardada con éxito');
-    onClose();
+    setIsSubmitting(true);
+    try {
+      updateProductRecipe(selectedId, items);
+      toast.success('Receta guardada con éxito');
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeleteRecipe = async () => {
-    if (!selectedId) return;
+    if (isSubmitting || !selectedId) return;
     const current = products.find((p) => p.id === selectedId);
     if (!current) return;
 
-    if (window.confirm(`¿Estás seguro de eliminar la receta de "${current.name}"?`)) {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
       await deleteProductRecipe(selectedId);
       toast.success(`Receta de "${current.name}" eliminada correctamente`);
       onClose();
+    } finally {
+      setIsSubmitting(false);
+      setConfirmDelete(false);
     }
   };
 
   const currentProd = products.find((p) => p.id === selectedId);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={product ? `Editar Receta: ${product.name}` : 'Crear / Editar Receta'}>
+    <Modal
+      isOpen={isOpen}
+      onClose={() => !isSubmitting && onClose()}
+      title={product ? `Editar Receta: ${product.name}` : 'Crear / Editar Receta'}
+    >
       <div className="space-y-4">
         {!product && (
           <div>
@@ -70,6 +95,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
               value={selectedId}
               onChange={(e) => {
                 setSelectedId(e.target.value);
+                setConfirmDelete(false);
                 const p = products.find((x) => x.id === e.target.value);
                 setItems(p?.recipe ? [...p.recipe] : []);
               }}
@@ -125,10 +151,11 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                       type="number"
                       step="any"
                       min="0.1"
-                      value={item.quantity}
+                      value={Number.isFinite(item.quantity) ? item.quantity : ''}
                       onChange={(e) => {
+                        const parsed = parseFloat(e.target.value);
                         const u = [...items];
-                        u[idx].quantity = parseFloat(e.target.value) || 0;
+                        u[idx].quantity = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
                         setItems(u);
                       }}
                       className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white text-center font-bold"
@@ -154,15 +181,26 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
           {currentProd?.recipe && (
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={handleDeleteRecipe}
-              className="px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
+              className="px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Eliminar Receta</span>
+              <span>{confirmDelete ? '¿Confirmar?' : 'Eliminar Receta'}</span>
             </button>
           )}
-          <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-          <Button variant="success" className="flex-1 font-bold" onClick={handleSave}>Guardar Receta</Button>
+          <Button variant="outline" disabled={isSubmitting} className="flex-1" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="success"
+            disabled={isSubmitting}
+            isLoading={isSubmitting}
+            className="flex-1 font-bold"
+            onClick={handleSave}
+          >
+            Guardar Receta
+          </Button>
         </div>
       </div>
     </Modal>

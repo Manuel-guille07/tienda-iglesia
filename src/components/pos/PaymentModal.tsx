@@ -25,83 +25,116 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const [notes, setNotes] = useState<string>('');
   const [sale, setSale] = useState<Sale | null>(null);
   const [donatedChange, setDonatedChange] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setTendered(total);
+      if (!customerId && customers[0]?.id) {
+        setCustomerId(customers[0].id);
+      }
+      setIsSubmitting(false);
+    }
+  }, [isOpen, total, customers, customerId]);
 
   const customer = customers.find((c) => c.id === customerId);
 
   const handleConvertChangeToDonation = () => {
-    if (!currentUser) return;
+    if (!currentUser || isSubmitting) return;
+    if (!Number.isFinite(tendered) || isNaN(tendered) || tendered <= total) {
+      toast.error('El importe entregado debe ser mayor al total para donar el cambio');
+      return;
+    }
+
     const change = Math.max(0, Number((tendered - total).toFixed(2)));
     if (change <= 0) return;
 
-    // 1. Registra la venta por su valor real
-    const res = processSale({
-      paymentMethod: 'efectivo',
-      amountTendered: total,
-      changeGiven: 0,
-      customerTabId: undefined,
-      customerName: undefined,
-      sellerName: currentUser.name,
-      sellerRole: currentUser.role,
-      notes: notes.trim() || undefined,
-    });
-
-    if (res.success && res.sale) {
-      // 2. Añade la diferencia (el cambio) como un ingreso por Donativo en la caja
-      const donativoProduct = products.find((p) => p.category === 'donativos');
-
-      const donationSale: Sale = {
-        id: `sale-${Date.now()}-donativo`,
-        timestamp: new Date().toISOString(),
-        items: [
-          {
-            product: donativoProduct
-              ? { ...donativoProduct, price: change }
-              : {
-                  id: 'prod-donativo-cambio',
-                  name: 'Donativo (Cambio de compra)',
-                  price: change,
-                  category: 'donativos',
-                  description: 'Cambio voluntario convertido en donativo para la obra',
-                },
-            quantity: 1,
-          },
-        ],
-        total: change,
-        paymentMethod: 'donativo',
-        donationSubMethod: 'efectivo',
-        amountTendered: change,
+    setIsSubmitting(true);
+    try {
+      // 1. Registra la venta por su valor real
+      const res = processSale({
+        paymentMethod: 'efectivo',
+        amountTendered: total,
         changeGiven: 0,
+        customerTabId: undefined,
+        customerName: undefined,
         sellerName: currentUser.name,
         sellerRole: currentUser.role,
-        notes: notes.trim()
-          ? `Donativo por cambio de compra: ${notes.trim()}`
-          : `Donativo por cambio de compra (Venta #${res.sale.id.slice(-6)})`,
-      };
+        notes: notes.trim() || undefined,
+      });
 
-      usePOSStore.setState((state) => ({
-        sales: [donationSale, ...state.sales],
-      }));
+      if (res.success && res.sale) {
+        // 2. Añade la diferencia (el cambio) como un ingreso por Donativo en la caja
+        const donativoProduct = products.find((p) => p.category === 'donativos');
 
-      setDonatedChange(change);
-      setSale(res.sale);
-      toast.success(t('payment.success'));
-    } else {
-      toast.error(res.error || 'Error al procesar venta');
+        const donationSale: Sale = {
+          id: `sale-${Date.now()}-donativo`,
+          timestamp: new Date().toISOString(),
+          items: [
+            {
+              product: donativoProduct
+                ? { ...donativoProduct, price: change }
+                : {
+                    id: 'prod-donativo-cambio',
+                    name: 'Donativo (Cambio de compra)',
+                    price: change,
+                    category: 'donativos',
+                    description: 'Cambio voluntario convertido en donativo para la obra',
+                  },
+              quantity: 1,
+            },
+          ],
+          total: change,
+          paymentMethod: 'donativo',
+          donationSubMethod: 'efectivo',
+          amountTendered: change,
+          changeGiven: 0,
+          sellerName: currentUser.name,
+          sellerRole: currentUser.role,
+          notes: notes.trim()
+            ? `Donativo por cambio de compra: ${notes.trim()}`
+            : `Donativo por cambio de compra (Venta #${res.sale.id.slice(-6)})`,
+        };
+
+        usePOSStore.setState((state) => ({
+          sales: [donationSale, ...state.sales],
+        }));
+
+        setDonatedChange(change);
+        setSale(res.sale);
+        toast.success(t('payment.success'));
+      } else {
+        toast.error(res.error || 'Error al procesar venta');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleConfirm = () => {
-    if (!currentUser) return;
+    if (!currentUser || isSubmitting) return;
 
-    // Validación estricta POS
+    // Validación estricta POS (Chaos Testing)
     if (!cart || cart.length === 0) {
       toast.error('El carrito está vacío');
       return;
     }
 
-    const hasInvalidQty = cart.some((item) => item.quantity <= 0);
+    if (!Number.isFinite(total) || isNaN(total) || total < 0) {
+      toast.error('Importe total inválido en el carrito');
+      return;
+    }
+
+    const hasInvalidQty = cart.some(
+      (item) =>
+        !Number.isFinite(item.quantity) ||
+        isNaN(item.quantity) ||
+        item.quantity <= 0 ||
+        !Number.isFinite(item.product.price) ||
+        item.product.price < 0
+    );
     if (hasInvalidQty) {
-      toast.error('La cantidad de los productos debe ser mayor a 0');
+      toast.error('La cantidad y precio de los productos deben ser válidos y mayores a 0');
       return;
     }
 
@@ -110,39 +143,60 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
       return;
     }
 
+    if (method === 'efectivo') {
+      if (!Number.isFinite(tendered) || isNaN(tendered) || tendered < 0) {
+        toast.error('Introduce un monto de efectivo válido');
+        return;
+      }
+      if (Number(tendered.toFixed(2)) < Number(total.toFixed(2))) {
+        toast.error(
+          `Efectivo insuficiente: faltan ${(total - tendered).toFixed(2)}€ para cubrir el total`
+        );
+        return;
+      }
+    }
+
     if (method === 'fiado' && !customerId) {
       toast.error('Debe seleccionar un cliente para la cuenta fiada');
       return;
     }
 
-    const change = Math.max(0, Number((tendered - total).toFixed(2)));
+    setIsSubmitting(true);
+    try {
+      const change = Math.max(0, Number((tendered - total).toFixed(2)));
 
-    const res = processSale({
-      paymentMethod: method,
-      amountTendered: method === 'efectivo' ? tendered : total,
-      changeGiven: method === 'efectivo' ? change : 0,
-      customerTabId: method === 'fiado' ? customerId : undefined,
-      customerName: method === 'fiado' ? customer?.name : undefined,
-      sellerName: currentUser.name,
-      sellerRole: currentUser.role,
-      notes: notes.trim() || undefined,
-    });
+      const res = processSale({
+        paymentMethod: method,
+        amountTendered: method === 'efectivo' ? tendered : total,
+        changeGiven: method === 'efectivo' ? change : 0,
+        customerTabId: method === 'fiado' ? customerId : undefined,
+        customerName: method === 'fiado' ? customer?.name : undefined,
+        sellerName: currentUser.name,
+        sellerRole: currentUser.role,
+        notes: notes.trim() || undefined,
+        donationSubMethod: method === 'donativo' ? donationSubMethod : undefined,
+      });
 
-    if (res.success && res.sale) {
-      if (method === 'fiado' && customerId) {
-        chargeSaleToTab(customerId, res.sale);
+      if (res.success && res.sale) {
+        if (method === 'fiado' && customerId) {
+          chargeSaleToTab(customerId, res.sale);
+        }
+        setSale(res.sale);
+        toast.success(t('payment.success'));
+      } else {
+        toast.error(res.error || 'Error al procesar venta');
       }
-      setSale(res.sale);
-      toast.success(t('payment.success'));
-    } else {
-      toast.error(res.error || 'Error al procesar venta');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     setSale(null);
     setDonatedChange(null);
     setNotes('');
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -285,6 +339,8 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                   type="button"
                   title="Convertir cambio en Donativo"
                   variant="outline"
+                  disabled={isSubmitting}
+                  isLoading={isSubmitting}
                   className="w-full border-pink-500/60 bg-pink-950/20 hover:bg-pink-900/30 text-pink-300 hover:text-pink-200 font-bold transition flex items-center justify-center gap-2"
                   onClick={handleConvertChangeToDonation}
                 >
@@ -355,7 +411,14 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
             </div>
           )}
 
-          <Button variant="success" size="lg" className="w-full font-bold shadow-lg" onClick={handleConfirm}>
+          <Button
+            variant="success"
+            size="lg"
+            disabled={isSubmitting}
+            isLoading={isSubmitting}
+            className="w-full font-bold shadow-lg"
+            onClick={handleConfirm}
+          >
             {method === 'consumo_interno'
               ? 'Registrar Cortesía / Consumo'
               : method === 'donativo'

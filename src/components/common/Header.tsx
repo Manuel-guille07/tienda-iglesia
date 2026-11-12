@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { WifiOff, LogOut, Globe } from 'lucide-react';
+import { WifiOff, LogOut, Globe, Activity } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { UserAvatarIcon } from '../ui/UserAvatarIcon';
+import { QADiagnosticModal } from '../users/QADiagnosticModal';
 import toast from 'react-hot-toast';
 
 export const Header: React.FC = () => {
   const { currentUser, logout } = useAuthStore();
   const { language, setLanguage, t } = useLanguage();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isQAModalOpen, setIsQAModalOpen] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -72,6 +74,19 @@ export const Header: React.FC = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Super Admin Exclusive QA Self-Diagnostic Trigger */}
+          {currentUser?.role === 'super_admin' && (
+            <button
+              type="button"
+              onClick={() => setIsQAModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-950/50 hover:bg-cyan-900/50 text-cyan-300 text-xs font-semibold border border-cyan-500/40 cursor-pointer transition"
+              title={t('qa.button')}
+            >
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden lg:inline">{t('qa.button')}</span>
+            </button>
+          )}
+
           {/* Online/Offline Status */}
           <div
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
@@ -90,7 +105,7 @@ export const Header: React.FC = () => {
                 <WifiOff className="w-3.5 h-3.5 text-rose-400" />
                 <span className="hidden md:inline">{t('offline')}</span>
               </>
-            )}
+            ) }
           </div>
 
           {/* Language Toggle */}
@@ -129,6 +144,10 @@ export const Header: React.FC = () => {
           )}
         </div>
       </div>
+
+      {currentUser?.role === 'super_admin' && (
+        <QADiagnosticModal isOpen={isQAModalOpen} onClose={() => setIsQAModalOpen(false)} />
+      )}
     </header>
   );
 };

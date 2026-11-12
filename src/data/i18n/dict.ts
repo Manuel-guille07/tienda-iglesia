@@ -80,6 +80,17 @@ export const esDict = {
   'users.inactive': 'Inactivo',
   'users.role.super_admin': 'Super Admin',
   'users.saved': 'Usuario guardado correctamente en Supabase',
+  'users.cannotDeactivateSelf': 'Operación bloqueada: No puedes desactivar ni degradar tu propio perfil activo',
+  'users.minOneAdmin': 'Operación bloqueada: El sistema debe mantener al menos 1 Super Admin activo',
+
+  // QA Self-Diagnostic Tool (Super Admin)
+  'qa.button': 'Autodiagnóstico QA',
+  'qa.title': 'Simulador de Autodiagnóstico QA & Chaos Testing',
+  'qa.subtitle': 'Verificación en vivo de latencia Supabase, RPCs atómicos e invariantes de negocio',
+  'qa.runTests': 'Ejecutar Batería QA',
+  'qa.running': 'Ejecutando pruebas...',
+  'qa.allPassed': 'Todas las pruebas de integridad y red superadas correctamente',
+  'qa.completedWithWarnings': 'Diagnóstico completado con advertencias de revisión',
 
   // 404
   '404.title': 'Ruta no encontrada',
@@ -286,6 +297,17 @@ export const enDict: Record<keyof typeof esDict, string> = {
   'users.inactive': 'Inactive',
   'users.role.super_admin': 'Super Admin',
   'users.saved': 'User saved successfully in Supabase',
+  'users.cannotDeactivateSelf': 'Action blocked: You cannot deactivate or demote your own active profile',
+  'users.minOneAdmin': 'Action blocked: The system must keep at least 1 active Super Admin',
+
+  // QA Self-Diagnostic Tool (Super Admin)
+  'qa.button': 'QA Self-Diagnostic',
+  'qa.title': 'QA Self-Diagnostic & Chaos Testing Simulator',
+  'qa.subtitle': 'Live verification of Supabase latency, atomic RPCs, and business invariants',
+  'qa.runTests': 'Run QA Suite',
+  'qa.running': 'Running tests...',
+  'qa.allPassed': 'All integrity and network tests passed successfully',
+  'qa.completedWithWarnings': 'Diagnostic completed with warnings',
 
   // 404
   '404.title': 'Page Not Found',

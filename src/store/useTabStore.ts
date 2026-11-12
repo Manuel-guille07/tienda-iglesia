@@ -115,6 +115,10 @@ export const useTabStore = create<TabState>((set, get) => ({
   },
 
   addPrepaidBalance: (customerId, amount, description = 'Recarga de saldo prepago', paymentMethod = 'efectivo') => {
+    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+      return;
+    }
+    const cleanAmount = Number(amount.toFixed(2));
     let updatedBalance = 0;
     let currentDebt = 0;
 
@@ -125,11 +129,11 @@ export const useTabStore = create<TabState>((set, get) => ({
           id: `mov-${Date.now()}`,
           timestamp: new Date().toISOString(),
           type: 'recarga',
-          amount,
+          amount: cleanAmount,
           description,
           paymentMethod,
         };
-        updatedBalance = Number((c.balance + amount).toFixed(2));
+        updatedBalance = Number((c.balance + cleanAmount).toFixed(2));
         currentDebt = c.debt;
         return {
           ...c,
@@ -145,21 +149,33 @@ export const useTabStore = create<TabState>((set, get) => ({
   },
 
   payDebt: (customerId, amount, description = 'Abono de deuda pendiente', paymentMethod = 'efectivo') => {
+    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+      return;
+    }
     const customer = get().customers.find((c) => c.id === customerId);
+    if (!customer) return;
+
+    const cleanAmount = Number(amount.toFixed(2));
+    const currentDebt = Number((customer.debt || 0).toFixed(2));
+
+    // Blindaje QA: Un abono nunca puede superar la deuda actual del cliente ni ser <= 0
+    if (cleanAmount > currentDebt || currentDebt <= 0) {
+      return;
+    }
+
     let newDebt = 0;
-    let newBalance = 0;
+    let newBalance = customer.balance;
 
     set({
       customers: get().customers.map((c) => {
         if (c.id !== customerId) return c;
-        newDebt = Math.max(0, Number((c.debt - amount).toFixed(2)));
-        const surplus = amount > c.debt ? Number((amount - c.debt).toFixed(2)) : 0;
-        newBalance = Number((c.balance + surplus).toFixed(2));
+        newDebt = Math.max(0, Number((c.debt - cleanAmount).toFixed(2)));
+        newBalance = c.balance;
         const mov: TabMovement = {
           id: `mov-${Date.now()}`,
           timestamp: new Date().toISOString(),
           type: 'pago',
-          amount,
+          amount: cleanAmount,
           description,
           paymentMethod,
         };
@@ -175,7 +191,7 @@ export const useTabStore = create<TabState>((set, get) => ({
     insertTabPayment({
       tab_id: customerId,
       customer_name: customer?.name,
-      amount,
+      amount: cleanAmount,
       payment_method: paymentMethod,
       description,
     }).catch((error) => {

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Users, UserPlus, ShieldCheck, Key, CheckCircle2, XCircle, Edit3, Save, X, Search } from 'lucide-react';
+import { Users, UserPlus, ShieldCheck, Key, CheckCircle2, XCircle, Edit3, Save, X, Search, Activity } from 'lucide-react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { User, Role } from '../../types';
 import { UserAvatarIcon, AVATAR_OPTIONS, sanitizeAvatarKey } from '../ui/UserAvatarIcon';
+import { QADiagnosticModal } from './QADiagnosticModal';
 import toast from 'react-hot-toast';
 
 export const UsersManagementScreen: React.FC = () => {
@@ -14,6 +15,8 @@ export const UsersManagementScreen: React.FC = () => {
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [isQAModalOpen, setIsQAModalOpen] = useState(false);
 
   const profileList = allProfiles.length > 0 ? allProfiles : users;
 
@@ -45,6 +48,8 @@ export const UsersManagementScreen: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+
     if (!editingUser || !editingUser.name?.trim()) {
       toast.error('El nombre del usuario no puede estar vacío');
       return;
@@ -54,6 +59,35 @@ export const UsersManagementScreen: React.FC = () => {
       return;
     }
 
+    const willBeActive = editingUser.isActive !== false;
+    const newRole = (editingUser.role as Role) || 'Vendedor';
+
+    // Protección de Sesión Activa: impedir que el super_admin desactive su propio perfil o se quite el rol super_admin
+    if (editingUser.id && editingUser.id === currentUser?.id) {
+      if (!willBeActive) {
+        toast.error(t('users.cannotDeactivateSelf'));
+        return;
+      }
+      if (currentUser.role === 'super_admin' && newRole !== 'super_admin') {
+        toast.error(t('users.cannotDeactivateSelf'));
+        return;
+      }
+    }
+
+    // Protección Mínimo 1 Super Admin Activo
+    if (editingUser.id) {
+      const existingTarget = profileList.find((u) => u.id === editingUser.id);
+      if (existingTarget?.role === 'super_admin') {
+        const remainingActiveSuperAdmins = profileList.filter(
+          (u) => u.id !== editingUser.id && u.role === 'super_admin' && u.isActive !== false
+        );
+        if ((!willBeActive || newRole !== 'super_admin') && remainingActiveSuperAdmins.length === 0) {
+          toast.error(t('users.minOneAdmin'));
+          return;
+        }
+      }
+    }
+
     setIsSaving(true);
     const toastId = toast.loading('Guardando usuario en Supabase...');
     try {
@@ -61,8 +95,8 @@ export const UsersManagementScreen: React.FC = () => {
         id: editingUser.id || '',
         name: editingUser.name.trim(),
         pin: editingUser.pin,
-        role: (editingUser.role as Role) || 'Vendedor',
-        isActive: editingUser.isActive !== false,
+        role: newRole,
+        isActive: willBeActive,
         avatar: sanitizeAvatarKey(editingUser.avatar),
       });
       toast.dismiss(toastId);
@@ -83,15 +117,29 @@ export const UsersManagementScreen: React.FC = () => {
   };
 
   const handleToggleStatus = async (user: User) => {
+    if (togglingId) return;
     if (user.id === currentUser?.id) {
-      toast.error('No puedes desactivar tu propio usuario activo');
+      toast.error(t('users.cannotDeactivateSelf'));
       return;
     }
+
+    // Impedir dejar el sistema con 0 usuarios super_admin activos
+    if (user.isActive !== false && user.role === 'super_admin') {
+      const remainingActiveSuperAdmins = profileList.filter(
+        (u) => u.id !== user.id && u.role === 'super_admin' && u.isActive !== false
+      );
+      if (remainingActiveSuperAdmins.length === 0) {
+        toast.error(t('users.minOneAdmin'));
+        return;
+      }
+    }
+
     const updated: User = {
       ...user,
       avatar: sanitizeAvatarKey(user.avatar),
       isActive: !user.isActive,
     };
+    setTogglingId(user.id);
     try {
       const result = await saveUserProfile(updated);
       if (result.success) {
@@ -102,6 +150,8 @@ export const UsersManagementScreen: React.FC = () => {
       }
     } catch (err: any) {
       toast.error(err?.message || 'Error al actualizar el estado del usuario');
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -117,13 +167,26 @@ export const UsersManagementScreen: React.FC = () => {
           <h1 className="text-2xl font-bold tracking-tight">{t('users.title')}</h1>
           <p className="text-slate-400 text-sm mt-1">{t('users.subtitle')}</p>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-lg shadow-lg hover:shadow-cyan-500/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>{t('users.newUser')}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {currentUser?.role === 'super_admin' && (
+            <button
+              type="button"
+              onClick={() => setIsQAModalOpen(true)}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 font-semibold rounded-lg shadow-md transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Activity className="w-4 h-4 text-cyan-400" />
+              <span>{t('qa.button')}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-lg shadow-lg hover:shadow-cyan-500/20 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>{t('users.newUser')}</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search */}
@@ -173,9 +236,11 @@ export const UsersManagementScreen: React.FC = () => {
                     </div>
                   </div>
                   <button
+                    type="button"
+                    disabled={togglingId === u.id}
                     onClick={() => handleToggleStatus(u)}
-                    title={isActive ? 'Desactivar usuario' : 'Activar usuario'}
-                    className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title={isCurrent ? t('users.cannotDeactivateSelf') : isActive ? 'Desactivar usuario' : 'Activar usuario'}
+                    className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
                   >
                     {isActive ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-400" />
@@ -227,6 +292,8 @@ export const UsersManagementScreen: React.FC = () => {
                 <span>{editingUser.id ? t('users.editUser') : t('users.newUser')}</span>
               </div>
               <button
+                type="button"
+                disabled={isSaving}
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -305,8 +372,9 @@ export const UsersManagementScreen: React.FC = () => {
                 </label>
                 <select
                   value={editingUser.role || 'Vendedor'}
+                  disabled={Boolean(editingUser.id && editingUser.id === currentUser?.id && currentUser?.role === 'super_admin')}
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as Role })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500 disabled:opacity-50"
                 >
                   <option value="Vendedor">{t('auth.role.vendedor')}</option>
                   <option value="Tesorería">{t('auth.role.tesoreria')}</option>
@@ -319,33 +387,37 @@ export const UsersManagementScreen: React.FC = () => {
                 <span className="text-xs font-medium text-slate-300">Cuenta Activa (Habilitada)</span>
                 <input
                   type="checkbox"
+                  disabled={Boolean(editingUser.id && editingUser.id === currentUser?.id)}
                   checked={editingUser.isActive !== false}
                   onChange={(e) => setEditingUser({ ...editingUser, isActive: e.target.checked })}
-                  className="w-4 h-4 accent-cyan-500 rounded cursor-pointer"
+                  className="w-4 h-4 accent-cyan-500 rounded cursor-pointer disabled:opacity-40"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs rounded-lg shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs rounded-lg shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Guardar</span>
+                  <span>{isSaving ? 'Guardando...' : 'Guardar'}</span>
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <QADiagnosticModal isOpen={isQAModalOpen} onClose={() => setIsQAModalOpen(false)} />
     </div>
   );
 };

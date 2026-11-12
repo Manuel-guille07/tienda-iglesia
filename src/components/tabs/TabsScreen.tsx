@@ -20,6 +20,7 @@ export const TabsScreen: React.FC = () => {
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [amount, setAmount] = useState<number>(10);
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'datafono'>('efectivo');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const filtered = customers.filter(
     (c) =>
@@ -28,28 +29,48 @@ export const TabsScreen: React.FC = () => {
   );
 
   const handleAction = () => {
+    if (isSubmitting) return;
     if (!cust) {
       toast.error('Debe seleccionar un cliente');
       return;
     }
-    if (!amount || amount <= 0) {
-      toast.error('El monto abonado o cargado debe ser estrictamente mayor a 0');
+    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+      toast.error('El monto abonado o cargado debe ser un número válido estrictamente mayor a 0');
       return;
     }
 
-    if (action === 'balance') {
-      addPrepaidBalance(cust.id, amount, 'Recarga de saldo prepago', paymentMethod);
-      const updated = useTabStore.getState().customers.find((c) => c.id === cust.id);
-      if (updated) setCust(updated);
-      toast.success(t('toast.balanceUpdated'));
-      setAction(null);
-    } else if (action === 'pay') {
-      payDebt(cust.id, amount, 'Abono de deuda pendiente', paymentMethod);
-      const updated = useTabStore.getState().customers.find((c) => c.id === cust.id);
-      if (updated) setCust(updated);
-      toast.success('Abono registrado con éxito');
-      setAction(null);
-      setIsReceiptOpen(true);
+    const cleanAmount = Number(amount.toFixed(2));
+    const currentDebt = Number((cust.debt || 0).toFixed(2));
+
+    if (action === 'pay') {
+      if (currentDebt <= 0) {
+        toast.error('Este cliente no tiene deuda pendiente por saldar');
+        return;
+      }
+      if (cleanAmount > currentDebt) {
+        toast.error(`El abono (${cleanAmount.toFixed(2)}€) no puede superar la deuda actual del cliente (${currentDebt.toFixed(2)}€)`);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (action === 'balance') {
+        addPrepaidBalance(cust.id, cleanAmount, 'Recarga de saldo prepago', paymentMethod);
+        const updated = useTabStore.getState().customers.find((c) => c.id === cust.id);
+        if (updated) setCust(updated);
+        toast.success(t('toast.balanceUpdated'));
+        setAction(null);
+      } else if (action === 'pay') {
+        payDebt(cust.id, cleanAmount, 'Abono de deuda pendiente', paymentMethod);
+        const updated = useTabStore.getState().customers.find((c) => c.id === cust.id);
+        if (updated) setCust(updated);
+        toast.success('Abono registrado con éxito');
+        setAction(null);
+        setIsReceiptOpen(true);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -136,7 +157,7 @@ export const TabsScreen: React.FC = () => {
 
       <Modal
         isOpen={!!action}
-        onClose={() => setAction(null)}
+        onClose={() => !isSubmitting && setAction(null)}
         title={action === 'balance' ? `Cargar Saldo a ${cust?.name || ''}` : `Abonar Deuda de ${cust?.name || ''}`}
       >
         <div className="space-y-4">
@@ -147,15 +168,27 @@ export const TabsScreen: React.FC = () => {
             <input
               type="number"
               step="0.50"
-              min="0.50"
-              value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              min="0.01"
+              max={action === 'pay' && cust ? cust.debt : undefined}
+              value={Number.isFinite(amount) ? amount || '' : ''}
+              onChange={(e) => {
+                const parsed = parseFloat(e.target.value);
+                const safeVal = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
+                setAmount(safeVal);
+              }}
               className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xl font-bold text-white focus:outline-none focus:border-indigo-500"
             />
             {action === 'pay' && cust && (
-              <p className="text-[11px] text-slate-400 mt-1">
-                Deuda actual pendiente: <strong className="text-rose-400">{cust.debt.toFixed(2)}€</strong>
-              </p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[11px] text-slate-400">
+                  Deuda actual pendiente: <strong className="text-rose-400">{cust.debt.toFixed(2)}€</strong>
+                </p>
+                {amount > cust.debt && (
+                  <span className="text-[11px] text-rose-400 font-semibold">
+                    Excede la deuda máxima ({cust.debt.toFixed(2)}€)
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
@@ -187,7 +220,14 @@ export const TabsScreen: React.FC = () => {
             </div>
           </div>
 
-          <Button variant="success" size="lg" className="w-full font-bold shadow-lg" onClick={handleAction}>
+          <Button
+            variant="success"
+            size="lg"
+            disabled={isSubmitting || amount <= 0 || (action === 'pay' && !!cust && amount > cust.debt)}
+            isLoading={isSubmitting}
+            className="w-full font-bold shadow-lg"
+            onClick={handleAction}
+          >
             {action === 'pay' ? 'Confirmar Abono y Generar Recibo' : 'Confirmar Carga'}
           </Button>
         </div>

@@ -9,6 +9,7 @@ interface CashArqueoPanelProps {
   onCountedChange: (val: number) => void;
   difference: number;
   onConfirmClose: () => void;
+  isSubmitting?: boolean;
 }
 
 export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
@@ -19,6 +20,7 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
   onCountedChange,
   difference,
   onConfirmClose,
+  isSubmitting = false,
 }) => {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
@@ -49,9 +51,14 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
         <input
           type="number"
           step="0.50"
-          value={counted || ''}
+          min="0"
+          value={Number.isFinite(counted) ? counted || '' : ''}
           placeholder="0.00"
-          onChange={(e) => onCountedChange(parseFloat(e.target.value) || 0)}
+          onChange={(e) => {
+            const parsed = parseFloat(e.target.value);
+            const safeVal = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
+            onCountedChange(safeVal);
+          }}
           className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xl font-bold text-emerald-400 focus:outline-none focus:border-indigo-500"
         />
       </div>
@@ -63,7 +70,14 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
         </strong>
       </div>
 
-      <Button variant="success" size="lg" className="w-full font-bold shadow-lg" onClick={onConfirmClose}>
+      <Button
+        variant="success"
+        size="lg"
+        disabled={isSubmitting || !Number.isFinite(counted) || counted < 0}
+        isLoading={isSubmitting}
+        className="w-full font-bold shadow-lg"
+        onClick={onConfirmClose}
+      >
         Confirmar y Cerrar Turno
       </Button>
     </div>
