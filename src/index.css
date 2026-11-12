@@ -157,6 +157,10 @@ html[data-theme="dark"] .border-slate-700 {
   scrollbar-width: none;
 }
 
+.pb-safe {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 1.25rem));
+}
+
 @media print {
   body * {
     visibility: hidden;
