@@ -664,6 +664,15 @@ export async function insertCloseout(closeout: Record<string, any> | Record<stri
 export const insertCloseouts = insertCloseout;
 
 // --- PROFILES (Usuarios en Supabase) ---
+const VALID_AVATAR_ICONS = ['user', 'coffee', 'crown', 'shield', 'wallet', 'heart'];
+
+export function sanitizeAvatarIcon(raw?: any): string {
+  if (!raw || typeof raw !== 'string') return 'user';
+  const cleaned = raw.trim().toLowerCase();
+  if (!cleaned || cleaned.startsWith('http')) return 'user';
+  return VALID_AVATAR_ICONS.includes(cleaned) ? cleaned : 'user';
+}
+
 export function toProfileSnake(user: Record<string, any>) {
   const fullName = (user.full_name || user.fullName || user.name || 'Usuario').trim();
   const validId = cleanUUID(user.id) || generateUUID();
@@ -674,11 +683,8 @@ export function toProfileSnake(user: Record<string, any>) {
     pin: String(user.pin || '0000'),
     role: user.role || 'Vendedor',
     is_active: user.isActive ?? user.is_active ?? true,
+    avatar: sanitizeAvatarIcon(user.avatar),
   };
-
-  if (user.avatar && typeof user.avatar === 'string' && user.avatar.trim() !== '') {
-    payload.avatar = user.avatar.trim();
-  }
 
   return payload;
 }
@@ -691,7 +697,7 @@ export function fromProfileSnake(row: Record<string, any>) {
     full_name: displayName,
     pin: String(row.pin || '0000'),
     role: (row.role || 'Vendedor') as any,
-    avatar: row.avatar || '👤',
+    avatar: sanitizeAvatarIcon(row.avatar),
     email: row.email || '',
     isActive: typeof row.is_active === 'boolean' ? row.is_active : true,
   };
@@ -721,11 +727,8 @@ export async function upsertProfile(profile: Record<string, any>) {
       pin: String(profile.pin || '0000'),
       role: profile.role || 'Vendedor',
       is_active: profile.isActive ?? profile.is_active ?? true,
+      avatar: sanitizeAvatarIcon(profile.avatar),
     };
-
-    if (profile.avatar && typeof profile.avatar === 'string' && profile.avatar.trim() !== '') {
-      baseData.avatar = profile.avatar.trim();
-    }
 
     let data: any = null;
     let error: any = null;

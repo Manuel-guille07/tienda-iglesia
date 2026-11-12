@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { Coffee, Wifi, WifiOff, LogOut, UserCheck, Globe, Shield } from 'lucide-react';
+import { WifiOff, LogOut, Globe } from 'lucide-react';
 import { Badge } from '../ui/Badge';
+import { UserAvatarIcon } from '../ui/UserAvatarIcon';
 import toast from 'react-hot-toast';
 
 export const Header: React.FC = () => {
@@ -106,7 +107,7 @@ export const Header: React.FC = () => {
           {currentUser && (
             <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
               <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/50 py-1 px-2.5 rounded-xl">
-                <span className="text-lg leading-none">{currentUser.avatar || '👤'}</span>
+                <UserAvatarIcon icon={currentUser.avatar} size="sm" />
                 <div className="hidden sm:block text-left">
                   <p className="text-xs font-semibold text-white leading-tight">{currentUser.name}</p>
                   <p className="text-[10px] text-indigo-400 leading-tight">{currentUser.role}</p>

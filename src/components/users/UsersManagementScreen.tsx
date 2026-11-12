@@ -3,6 +3,7 @@ import { Users, UserPlus, ShieldCheck, Key, CheckCircle2, XCircle, Edit3, Save, 
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { User, Role } from '../../types';
+import { UserAvatarIcon, AVATAR_OPTIONS, sanitizeAvatarKey } from '../ui/UserAvatarIcon';
 import toast from 'react-hot-toast';
 
 export const UsersManagementScreen: React.FC = () => {
@@ -29,13 +30,16 @@ export const UsersManagementScreen: React.FC = () => {
       pin: '0000',
       role: 'Vendedor',
       isActive: true,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
+      avatar: 'user',
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (user: User) => {
-    setEditingUser({ ...user });
+    setEditingUser({
+      ...user,
+      avatar: sanitizeAvatarKey(user.avatar),
+    });
     setIsModalOpen(true);
   };
 
@@ -59,7 +63,7 @@ export const UsersManagementScreen: React.FC = () => {
         pin: editingUser.pin,
         role: (editingUser.role as Role) || 'Vendedor',
         isActive: editingUser.isActive !== false,
-        avatar: editingUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120',
+        avatar: sanitizeAvatarKey(editingUser.avatar),
       });
       toast.dismiss(toastId);
       if (result.success) {
@@ -83,7 +87,11 @@ export const UsersManagementScreen: React.FC = () => {
       toast.error('No puedes desactivar tu propio usuario activo');
       return;
     }
-    const updated: User = { ...user, isActive: !user.isActive };
+    const updated: User = {
+      ...user,
+      avatar: sanitizeAvatarKey(user.avatar),
+      isActive: !user.isActive,
+    };
     try {
       const result = await saveUserProfile(updated);
       if (result.success) {
@@ -111,7 +119,7 @@ export const UsersManagementScreen: React.FC = () => {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-lg shadow-lg hover:shadow-cyan-500/20 transition-all flex items-center gap-2 shrink-0"
+          className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-lg shadow-lg hover:shadow-cyan-500/20 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
           <span>{t('users.newUser')}</span>
@@ -151,11 +159,7 @@ export const UsersManagementScreen: React.FC = () => {
               <div>
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120'}
-                      alt={u.name}
-                      className="w-12 h-12 rounded-full object-cover border border-slate-700"
-                    />
+                    <UserAvatarIcon icon={u.avatar} size="lg" />
                     <div>
                       <div className="flex items-center gap-1.5">
                         <h3 className="font-semibold text-white text-base leading-snug">{u.name}</h3>
@@ -171,7 +175,7 @@ export const UsersManagementScreen: React.FC = () => {
                   <button
                     onClick={() => handleToggleStatus(u)}
                     title={isActive ? 'Desactivar usuario' : 'Activar usuario'}
-                    className="p-1 text-slate-400 hover:text-white transition-colors"
+                    className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
                   >
                     {isActive ? (
                       <CheckCircle2 className="w-5 h-5 text-emerald-400" />
@@ -191,9 +195,9 @@ export const UsersManagementScreen: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Estado:</span>
+                    <span className="text-slate-500">{t('users.status')}:</span>
                     <span className={isActive ? 'text-emerald-400 font-medium' : 'text-rose-400 font-medium'}>
-                      {isActive ? 'Activo / Habilitado' : 'Inactivo / Deshabilitado'}
+                      {isActive ? t('users.active') : t('users.inactive')}
                     </span>
                   </div>
                 </div>
@@ -202,10 +206,10 @@ export const UsersManagementScreen: React.FC = () => {
               <div className="pt-2 border-t border-slate-800/60 flex items-center justify-end gap-2">
                 <button
                   onClick={() => handleOpenEdit(u)}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>Editar</span>
+                  <span>{t('users.editUser')}</span>
                 </button>
               </div>
             </div>
@@ -224,13 +228,44 @@ export const UsersManagementScreen: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4 text-slate-200 text-sm">
+              {/* Compact 6-Icon Picker */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-2">
+                  {t('users.avatar')}
+                </label>
+                <div className="grid grid-cols-6 gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                  {AVATAR_OPTIONS.map((opt) => {
+                    const selectedKey = sanitizeAvatarKey(editingUser.avatar);
+                    const isSelected = selectedKey === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        title={opt.label}
+                        onClick={() => setEditingUser({ ...editingUser, avatar: opt.key })}
+                        className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-cyan-500/15 border-cyan-400 shadow-md shadow-cyan-500/10 scale-105'
+                            : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100'
+                        }`}
+                      >
+                        <UserAvatarIcon icon={opt.key} size="sm" />
+                        <span className="text-[9px] font-medium text-slate-400 mt-1 truncate max-w-full">
+                          {opt.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">
                   {t('users.name')}
@@ -294,14 +329,14 @@ export const UsersManagementScreen: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs rounded-lg shadow-md transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs rounded-lg shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Guardar</span>

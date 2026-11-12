@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { User, Role } from '../types';
 import { supabase } from '../lib/supabase';
-import { getProfiles, upsertProfile, cleanUUID, generateUUID } from '../services/db';
+import { getProfiles, upsertProfile, cleanUUID, generateUUID, sanitizeAvatarIcon } from '../services/db';
 
 export function getUserInternalEmail(user: User): string {
   if (user.email) return user.email;
@@ -205,7 +205,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       name: userData.name.trim(),
       pin: String(userData.pin || '0000'),
       role: userData.role || 'Vendedor',
-      avatar: userData.avatar || '👤',
+      avatar: sanitizeAvatarIcon(userData.avatar),
       email: userData.email || getUserInternalEmail(userData as User),
       isActive: userData.isActive ?? true,
     };

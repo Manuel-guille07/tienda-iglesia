@@ -3,7 +3,8 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Delete, Lock, User as UserIcon, ChevronDown } from 'lucide-react';
+import { Delete, Lock, User as UserIcon } from 'lucide-react';
+import { UserSelectDropdown } from '../ui/UserSelectDropdown';
 
 export const LoginScreen: React.FC = () => {
   const { t } = useLanguage();
@@ -58,7 +59,7 @@ export const LoginScreen: React.FC = () => {
 
   const triggerLogin = async (pinToTest: string) => {
     if (!selectedUserForPin) {
-      toast.error('Por favor, selecciona un usuario');
+      toast.error(t('auth.selectUser'));
       return;
     }
 
@@ -94,15 +95,15 @@ export const LoginScreen: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-white">ELARX POS</h1>
+            <h1 className="text-xl font-bold tracking-tight text-white">{t('app.title')}</h1>
             <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded border border-indigo-500/40 bg-indigo-500/10 text-indigo-300">
               v1.2 Core
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">Terminal de Ventas & Gestión Híbrida</p>
+          <p className="text-xs text-slate-400 mt-1">{t('auth.subtitle')}</p>
         </div>
 
-        {/* Únicamente un <select> estilizado con branding ELARX para elegir usuario */}
+        {/* Selector desplegable personalizado estilo ELARX con iconos vectoriales */}
         <div className="w-full mb-6">
           <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-2">
             <UserIcon className="w-3.5 h-3.5 text-indigo-400" />
@@ -112,35 +113,22 @@ export const LoginScreen: React.FC = () => {
           {isLoadingProfiles ? (
             <div className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center gap-2 text-xs text-slate-400">
               <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <span>Cargando perfiles desde Supabase...</span>
+              <span>{t('auth.loadingProfiles')}</span>
             </div>
           ) : users.length === 0 ? (
             <div className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-xs text-rose-400 text-center">
-              No hay usuarios registrados en la base de datos
+              {t('auth.noUsers')}
             </div>
           ) : (
-            <div className="relative">
-              <select
-                value={selectedUserForPin?.id || ''}
-                onChange={(e) => {
-                  const found = users.find((u) => u.id === e.target.value);
-                  if (found) {
-                    setSelectedUserForPin(found);
-                    setPin('');
-                  }
-                }}
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-indigo-500 rounded-2xl text-sm font-semibold text-white appearance-none transition cursor-pointer shadow-inner"
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id} className="bg-slate-900 text-white py-2">
-                    {u.avatar || '👤'} {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                <ChevronDown className="w-4 h-4" />
-              </div>
-            </div>
+            <UserSelectDropdown
+              users={users}
+              selectedUser={selectedUserForPin}
+              disabled={isLoading}
+              onSelect={(user) => {
+                setSelectedUserForPin(user);
+                setPin('');
+              }}
+            />
           )}
         </div>
 
@@ -148,7 +136,7 @@ export const LoginScreen: React.FC = () => {
         <div className="flex flex-col items-center mb-5">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
             <Lock className="w-3 h-3 text-slate-400" />
-            PIN de Seguridad (4 dígitos)
+            {t('auth.enterPin')}
           </span>
           <div className="flex items-center gap-3">
             {[0, 1, 2, 3].map((index) => (
@@ -205,7 +193,7 @@ export const LoginScreen: React.FC = () => {
 
         {/* Helper footer */}
         <div className="text-center text-[10px] text-slate-500">
-          Usa el selector desplegable y introduce el PIN de 4 dígitos
+          {t('auth.subtitle')}
         </div>
       </div>
     </div>
