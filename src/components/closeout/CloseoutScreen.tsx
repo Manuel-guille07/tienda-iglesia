@@ -4,6 +4,7 @@ import { useCloseoutStore } from '../../store/useCloseoutStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Calculator, FileSpreadsheet, Download, Printer } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { IncidentModal } from './IncidentModal';
@@ -14,6 +15,9 @@ import toast from 'react-hot-toast';
 
 export const CloseoutScreen: React.FC = () => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const { currentUser } = useAuthStore();
   const { sales } = usePOSStore();
   const { customers } = useTabStore();
@@ -34,7 +38,6 @@ export const CloseoutScreen: React.FC = () => {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [isClosingShift, setIsClosingShift] = useState(false);
 
-  // Obtener cobros y abonos de fiados
   const allTabPayments = customers.flatMap((c) =>
     (c.movements || [])
       .filter((m) => m.type === 'pago')
@@ -47,7 +50,6 @@ export const CloseoutScreen: React.FC = () => {
       }))
   );
 
-  // 1. Obtener la fecha más reciente del último cierre registrado en Supabase / Estado global
   const lastClose = shiftCloses[0];
   const latestCloseMs = Math.max(
     lastClose?.timestamp ? new Date(lastClose.timestamp).getTime() : 0,
@@ -57,7 +59,6 @@ export const CloseoutScreen: React.FC = () => {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  // 2. Caja Única Compartida: Suma TODAS las ventas posteriores al último cierre (sin filtrar por vendedor)
   const isAfterLastCloseout = (isoString?: string) => {
     if (!isoString) return false;
     const d = new Date(isoString);
@@ -71,7 +72,6 @@ export const CloseoutScreen: React.FC = () => {
   const shiftSales = sales.filter((s) => isAfterLastCloseout(s.timestamp));
   const shiftTabPayments = allTabPayments.filter((p) => isAfterLastCloseout(p.timestamp));
 
-  // Resumen de vendedores que han cobrado en esta Caja Única durante el turno activo
   const sellersInShift = Array.from(
     shiftSales.reduce((map, s) => {
       const seller = s.sellerName || 'Vendedor';
@@ -83,7 +83,6 @@ export const CloseoutScreen: React.FC = () => {
     }, new Map<string, { count: number; total: number }>())
   );
 
-  // Ventas globales del turno actual (todos los vendedores)
   const salesCash = Number(
     shiftSales.filter((s) => s.paymentMethod === 'efectivo').reduce((a, s) => a + s.total, 0).toFixed(2)
   );
@@ -105,15 +104,25 @@ export const CloseoutScreen: React.FC = () => {
       .toFixed(2)
   );
 
-  // TOTALES ESPERADOS EN LA CAJA FÍSICA COMPARTIDA
   const expectedCash = Number((salesCash + tabPaymentsCash).toFixed(2));
   const totalCard = Number((salesCard + tabPaymentsCard).toFixed(2));
-  const totalFiados = Number(shiftSales.filter((s) => s.paymentMethod === 'fiado').reduce((a, s) => a + s.total, 0).toFixed(2));
-  const totalDonativos = Number(shiftSales.filter((s) => s.paymentMethod === 'donativo').reduce((a, s) => a + s.total, 0).toFixed(2));
-  const totalConsumo = Number(shiftSales.filter((s) => s.paymentMethod === 'consumo_interno').reduce((a, s) => a + s.total, 0).toFixed(2));
+  const totalFiados = Number(
+    shiftSales.filter((s) => s.paymentMethod === 'fiado').reduce((a, s) => a + s.total, 0).toFixed(2)
+  );
+  const totalDonativos = Number(
+    shiftSales.filter((s) => s.paymentMethod === 'donativo').reduce((a, s) => a + s.total, 0).toFixed(2)
+  );
+  const totalConsumo = Number(
+    shiftSales.filter((s) => s.paymentMethod === 'consumo_interno').reduce((a, s) => a + s.total, 0).toFixed(2)
+  );
 
   const totalCoffees = shiftSales.reduce((a, s) => {
-    return a + (s.items || []).filter((it) => it.product?.category === 'cafeteria').reduce((sum, it) => sum + it.quantity, 0);
+    return (
+      a +
+      (s.items || [])
+        .filter((it) => it.product?.category === 'cafeteria')
+        .reduce((sum, it) => sum + it.quantity, 0)
+    );
   }, 0);
 
   const difference = Number((counted - expectedCash).toFixed(2));
@@ -141,24 +150,29 @@ export const CloseoutScreen: React.FC = () => {
   const shiftVoidAudits = voidAudits.filter((a) => isAfterLastCloseout(a.timestamp));
   const voidedTotal = shiftVoidAudits.reduce((acc, a) => acc + (a.returnedAmount || 0), 0);
 
+  const cardSurface = isDark
+    ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+    : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]';
+
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
+      {/* Cabecera */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Calculator className="w-5 h-5 text-indigo-400" />
+          <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2.5">
+            <Calculator className="w-6 h-6" />
             {t('closeout.title')}
           </h2>
-          <p className="text-xs text-slate-400">
-            {t('closeout.sharedDrawer')} · Arqueo ejecutado por:{' '}
-            <strong className="text-white">{currentUser?.name}</strong> ({currentUser?.role})
+          <p className={`text-sm mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            {t('closeout.sharedDrawer')} · Responsable:{' '}
+            <strong className="font-semibold">{currentUser?.name}</strong>
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
-            icon={<Download className="w-4 h-4 text-emerald-400" />}
+            icon={<Download className="w-4 h-4" />}
             onClick={() => {
               const s = recordShiftClose(getShift());
               downloadCSV(s, shiftSales, shiftTabPayments);
@@ -170,7 +184,7 @@ export const CloseoutScreen: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            icon={<Printer className="w-4 h-4 text-indigo-400" />}
+            icon={<Printer className="w-4 h-4" />}
             onClick={() => {
               setPdfModalOpen(true);
               toast.success(t('export.pdfReady'));
@@ -179,7 +193,7 @@ export const CloseoutScreen: React.FC = () => {
             {t('export.pdfButton')}
           </Button>
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
             isLoading={isSyncingSheets}
             icon={<FileSpreadsheet className="w-4 h-4" />}
@@ -194,16 +208,16 @@ export const CloseoutScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Información de Vendedores en la Caja Única Compartida */}
+      {/* Vendedores en el Turno Compartido */}
       {sellersInShift.length > 0 && (
-        <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="text-slate-400 font-medium">
-            {t('closeout.sellersInShift')} ({shiftSales.length} tickets globales):
+        <div className={`p-4 rounded-3xl border flex flex-wrap items-center justify-between gap-2 text-sm ${cardSurface}`}>
+          <span className={isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}>
+            {t('closeout.sellersInShift')} ({shiftSales.length} tickets):
           </span>
-          <div className="flex flex-wrap items-center gap-3 font-mono tabular-nums">
+          <div className="flex flex-wrap items-center gap-4 tabular-nums">
             {sellersInShift.map(([seller, info]) => (
-              <span key={seller} className="text-slate-200">
-                <strong className="text-indigo-300 font-sans">{seller}</strong>: {info.count} vta ({info.total.toFixed(2)}€)
+              <span key={seller}>
+                <strong className="font-semibold">{seller}</strong>: {info.count} vta ({info.total.toFixed(2)} €)
               </span>
             ))}
           </div>
@@ -211,53 +225,55 @@ export const CloseoutScreen: React.FC = () => {
       )}
 
       {shiftVoidAudits.length > 0 && (
-        <div className="bg-rose-500/10 border border-rose-500/25 p-3 rounded-2xl flex items-center justify-between text-xs text-rose-300">
-          <span className="font-semibold text-rose-200">
+        <div className="bg-rose-500/10 border border-rose-500/25 p-4 rounded-3xl flex items-center justify-between text-sm text-rose-500">
+          <span className="font-medium">
             Auditoría de Turno: {shiftVoidAudits.length} venta(s) anulada(s) con stock devuelto
           </span>
-          <span className="font-mono font-bold text-rose-400">-{voidedTotal.toFixed(2)}€</span>
+          <span className="font-bold tabular-nums">-{voidedTotal.toFixed(2)} €</span>
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-xs text-slate-400 block">Efectivo Total</span>
-          <span className="text-xl font-black text-emerald-400">{expectedCash.toFixed(2)}€</span>
+      {/* Tarjetas KPI de Turno */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
+          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            Efectivo Esperado
+          </span>
+          <span className="text-2xl font-bold tabular-nums block mt-1">{expectedCash.toFixed(2)} €</span>
           {tabPaymentsCash > 0 && (
-            <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
-              Ventas: {salesCash.toFixed(2)}€ | Abonos: +{tabPaymentsCash.toFixed(2)}€
+            <span className={`text-xs block mt-1 truncate ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+              Vtas: {salesCash.toFixed(2)} € · Abonos: +{tabPaymentsCash.toFixed(2)} €
             </span>
           )}
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-xs text-slate-400 block">Datáfono Total</span>
-          <span className="text-xl font-black text-sky-400">{totalCard.toFixed(2)}€</span>
-          {tabPaymentsCard > 0 && (
-            <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
-              Ventas: {salesCard.toFixed(2)}€ | Abonos: +{tabPaymentsCard.toFixed(2)}€
-            </span>
-          )}
+        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
+          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            Datáfono Total
+          </span>
+          <span className="text-2xl font-bold tabular-nums block mt-1">{totalCard.toFixed(2)} €</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-xs text-slate-400 block">Nuevos Fiados</span>
-          <span className="text-xl font-black text-amber-400">{totalFiados.toFixed(2)}€</span>
-          {(tabPaymentsCash + tabPaymentsCard) > 0 && (
-            <span className="text-[10px] text-emerald-400 block mt-0.5 truncate">
-              Cobrados: {(tabPaymentsCash + tabPaymentsCard).toFixed(2)}€
-            </span>
-          )}
+        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
+          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            Nuevos Fiados
+          </span>
+          <span className="text-2xl font-bold tabular-nums block mt-1">{totalFiados.toFixed(2)} €</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl">
-          <span className="text-xs text-slate-400 block">Donativos</span>
-          <span className="text-xl font-black text-pink-400">{totalDonativos.toFixed(2)}€</span>
+        <div className={`p-4 rounded-3xl border ${cardSurface}`}>
+          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            Donativos
+          </span>
+          <span className="text-2xl font-bold tabular-nums block mt-1">{totalDonativos.toFixed(2)} €</span>
         </div>
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl col-span-2 sm:col-span-1">
-          <span className="text-xs text-slate-400 block">Cafés</span>
-          <span className="text-xl font-black text-amber-300">{totalCoffees}</span>
+        <div className={`p-4 rounded-3xl border col-span-2 sm:col-span-1 ${cardSurface}`}>
+          <span className={`text-xs font-medium block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            Cafés Servidos
+          </span>
+          <span className="text-2xl font-bold tabular-nums block mt-1">{totalCoffees}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Arqueo + Incidencias */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <CashArqueoPanel
           expectedCash={expectedCash}
           salesCash={salesCash}

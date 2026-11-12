@@ -1,9 +1,156 @@
 @import "tailwindcss";
 
+:root,
+html[data-theme="light"] {
+  --ql-bg-app: #EFECE6;
+  --ql-bg-card: #FAF8F5;
+  --ql-bg-elevated: #F2EFE9;
+  --ql-bg-muted: #E6E1D8;
+  --ql-border: #E2DDD5;
+  --ql-border-strong: #CFC8BC;
+  --ql-text-primary: #141210;
+  --ql-text-secondary: #6E665E;
+  --ql-text-muted: #8C8379;
+  --ql-accent-bg: #141210;
+  --ql-accent-text: #FAF8F5;
+  --ql-shadow: 0 10px 30px -10px rgba(20, 18, 16, 0.08);
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --ql-bg-app: #0E0C0B;
+  --ql-bg-card: #171412;
+  --ql-bg-elevated: #211D1A;
+  --ql-bg-muted: #2A2420;
+  --ql-border: #2A2420;
+  --ql-border-strong: #3D352F;
+  --ql-text-primary: #F4F0EA;
+  --ql-text-secondary: #9A9086;
+  --ql-text-muted: #786F66;
+  --ql-accent-bg: #EFECE6;
+  --ql-accent-text: #141210;
+  --ql-shadow: 0 14px 36px -10px rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
 @layer base {
   body {
-    @apply bg-slate-900 text-slate-100;
+    background-color: var(--ql-bg-app);
+    color: var(--ql-text-primary);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
+}
+
+/* Quiet Luxury Semantic Classes */
+.ql-bg-app {
+  background-color: var(--ql-bg-app);
+  color: var(--ql-text-primary);
+}
+
+.ql-card {
+  background-color: var(--ql-bg-card);
+  border: 1px solid var(--ql-border);
+  color: var(--ql-text-primary);
+  box-shadow: var(--ql-shadow);
+}
+
+.ql-elevated {
+  background-color: var(--ql-bg-elevated);
+  border: 1px solid var(--ql-border);
+  color: var(--ql-text-primary);
+}
+
+.ql-text-primary {
+  color: var(--ql-text-primary);
+}
+
+.ql-text-secondary {
+  color: var(--ql-text-secondary);
+}
+
+.ql-border {
+  border-color: var(--ql-border);
+}
+
+.ql-accent {
+  background-color: var(--ql-accent-bg);
+  color: var(--ql-accent-text);
+}
+
+/* Adaptive Quiet Luxury mapping for secondary admin screens in Light Mode */
+html[data-theme="light"] .bg-slate-950,
+html[data-theme="light"] .bg-slate-950\/80,
+html[data-theme="light"] .bg-slate-950\/40 {
+  background-color: var(--ql-bg-elevated) !important;
+}
+
+html[data-theme="light"] .bg-slate-900,
+html[data-theme="light"] .bg-slate-900\/90,
+html[data-theme="light"] .bg-slate-900\/95,
+html[data-theme="light"] .bg-slate-900\/60 {
+  background-color: var(--ql-bg-card) !important;
+}
+
+html[data-theme="light"] .bg-slate-800,
+html[data-theme="light"] .bg-slate-800\/80,
+html[data-theme="light"] .bg-slate-800\/60,
+html[data-theme="light"] .bg-slate-800\/40 {
+  background-color: var(--ql-bg-elevated) !important;
+}
+
+html[data-theme="light"] .border-slate-800,
+html[data-theme="light"] .border-slate-800\/80,
+html[data-theme="light"] .border-slate-800\/60,
+html[data-theme="light"] .border-slate-700,
+html[data-theme="light"] .border-slate-700\/80,
+html[data-theme="light"] .border-slate-700\/60,
+html[data-theme="light"] .border-slate-750 {
+  border-color: var(--ql-border) !important;
+}
+
+html[data-theme="light"] .text-white,
+html[data-theme="light"] .text-slate-100,
+html[data-theme="light"] .text-slate-200 {
+  color: var(--ql-text-primary) !important;
+}
+
+html[data-theme="light"] .text-slate-300,
+html[data-theme="light"] .text-slate-400,
+html[data-theme="light"] .text-slate-500 {
+  color: var(--ql-text-secondary) !important;
+}
+
+/* Adaptive Quiet Luxury mapping for secondary admin screens in Dark Mode */
+html[data-theme="dark"] .bg-slate-950 {
+  background-color: #0E0C0B !important;
+}
+
+html[data-theme="dark"] .bg-slate-900,
+html[data-theme="dark"] .bg-slate-900\/90,
+html[data-theme="dark"] .bg-slate-900\/95 {
+  background-color: #171412 !important;
+}
+
+html[data-theme="dark"] .bg-slate-800,
+html[data-theme="dark"] .bg-slate-800\/80,
+html[data-theme="dark"] .bg-slate-800\/60 {
+  background-color: #211D1A !important;
+}
+
+html[data-theme="dark"] .border-slate-800,
+html[data-theme="dark"] .border-slate-700 {
+  border-color: #2A2420 !important;
+}
+
+/* Hide scrollbars cleanly on horizontal pill bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 @media print {
@@ -27,4 +174,3 @@
     color: #0f172a !important;
   }
 }
-

@@ -3,6 +3,7 @@ import { usePOSStore } from '../../store/usePOSStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { PaymentMethod, Sale } from '../../types';
@@ -12,6 +13,9 @@ import { CheckCircle, Share2, Banknote, CreditCard, BookOpen, Heart, Coffee } fr
 
 export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const { currentUser } = useAuthStore();
   const { cart, processSale, products } = usePOSStore();
   const { customers, chargeSaleToTab, generateReceiptText, getWhatsAppShareUrl } = useTabStore();
@@ -21,7 +25,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const [method, setMethod] = useState<PaymentMethod>('efectivo');
   const [tendered, setTendered] = useState<number>(total);
   const [customerId, setCustomerId] = useState<string>(customers[0]?.id || '');
-  const [donationSubMethod, setDonationSubMethod] = useState<'efectivo' | 'datafono'>('efectivo');
+  const [donationSubMethod] = useState<'efectivo' | 'datafono'>('efectivo');
   const [notes, setNotes] = useState<string>('');
   const [sale, setSale] = useState<Sale | null>(null);
   const [donatedChange, setDonatedChange] = useState<number | null>(null);
@@ -51,7 +55,6 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
     setIsSubmitting(true);
     try {
-      // 1. Registra la venta por su valor real
       const res = processSale({
         paymentMethod: 'efectivo',
         amountTendered: total,
@@ -64,7 +67,6 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
       });
 
       if (res.success && res.sale) {
-        // 2. Añade la diferencia (el cambio) como un ingreso por Donativo en la caja
         const donativoProduct = products.find((p) => p.category === 'donativos');
 
         const donationSale: Sale = {
@@ -114,7 +116,6 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const handleConfirm = () => {
     if (!currentUser || isSubmitting) return;
 
-    // Validación estricta POS (Chaos Testing)
     if (!cart || cart.length === 0) {
       toast.error('El carrito está vacío');
       return;
@@ -201,229 +202,220 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={sale ? '¡Cobro Exitoso!' : t('payment.title')}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={sale ? '¡Cobro Completado!' : t('payment.title')}>
       {sale ? (
-        <div className="text-center py-2 space-y-3">
-          <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
+        <div className="text-center py-4 space-y-4">
+          <div
+            className={`w-14 h-14 rounded-full mx-auto flex items-center justify-center ${
+              isDark ? 'bg-[#EFECE6] text-[#141210]' : 'bg-[#141210] text-[#FAF8F5]'
+            }`}
+          >
             <CheckCircle className="w-8 h-8" />
           </div>
-          <h3 className="text-lg font-bold text-white">Venta #{sale.id.slice(-6)}</h3>
-          <p className="text-3xl font-black text-emerald-400">{sale.total.toFixed(2)}€</p>
+          <h3 className="text-lg font-semibold">Venta #{sale.id.slice(-6)}</h3>
+          <p className="text-4xl font-bold tabular-nums">{sale.total.toFixed(2)} €</p>
           {sale.paymentMethod === 'efectivo' && sale.changeGiven ? (
-            <p className="text-xs text-slate-300">Cambio: <strong className="text-emerald-400">{sale.changeGiven.toFixed(2)}€</strong></p>
+            <p className={`text-base ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+              Cambio a entregar: <strong className="font-bold">{sale.changeGiven.toFixed(2)} €</strong>
+            </p>
           ) : null}
           {donatedChange !== null && (
-            <p className="text-xs text-pink-300 flex items-center justify-center gap-1">
-              <Heart className="w-3.5 h-3.5 text-pink-400" />
-              Donativo registrado: <strong className="text-pink-300">{donatedChange.toFixed(2)}€</strong>
+            <p className="text-sm flex items-center justify-center gap-1.5 font-medium">
+              <Heart className="w-4 h-4" />
+              Donativo registrado: <strong>{donatedChange.toFixed(2)} €</strong>
             </p>
           )}
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-3 pt-3">
             {customer && (
               <a
                 href={getWhatsAppShareUrl(customer.phone, generateReceiptText(customer, sale))}
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5"
+                className="flex-1 min-h-[52px] px-4 rounded-full bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-base flex items-center justify-center gap-2"
               >
-                <Share2 className="w-4 h-4" /> Recibo WhatsApp
+                <Share2 className="w-5 h-5" /> Recibo WhatsApp
               </a>
             )}
-            <Button variant="primary" className="flex-1" onClick={handleClose}>Listo</Button>
+            <Button variant="primary" size="lg" className="flex-1" onClick={handleClose}>
+              Listo
+            </Button>
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="bg-slate-800 p-3 rounded-xl flex justify-between items-center">
-            <span className="text-xs text-slate-300">{t('payment.amountToPay')}</span>
-            <span className="text-2xl font-black text-emerald-400">{total.toFixed(2)}€</span>
+        <div className="space-y-4">
+          {/* Importe Total Destacado */}
+          <div
+            className={`p-4 rounded-3xl border flex justify-between items-center ${
+              isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+            }`}
+          >
+            <span className={`text-sm font-medium ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+              {t('payment.amountToPay')}
+            </span>
+            <span className="text-3xl font-bold tabular-nums">{total.toFixed(2)} €</span>
           </div>
 
           {/* Métodos de Cobro Habituales */}
           <div>
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
-              Métodos de Cobro Habituales
+            <label
+              className={`text-xs font-semibold uppercase tracking-wider block mb-2 ${
+                isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+              }`}
+            >
+              Método de Cobro
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setMethod('efectivo')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
-                  method === 'efectivo'
-                    ? 'bg-emerald-600/30 border-emerald-500 text-white font-bold'
-                    : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                <Banknote className="w-5 h-5 text-emerald-400" />
-                <span className="text-xs">Efectivo 💶</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMethod('datafono')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
-                  method === 'datafono'
-                    ? 'bg-sky-600/30 border-sky-500 text-white font-bold'
-                    : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                <CreditCard className="w-5 h-5 text-sky-400" />
-                <span className="text-xs">Datáfono 💳</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMethod('fiado')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
-                  method === 'fiado'
-                    ? 'bg-amber-600/30 border-amber-500 text-white font-bold'
-                    : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
-                }`}
-              >
-                <BookOpen className="w-5 h-5 text-amber-400" />
-                <span className="text-xs">Fiado / Saldo 📜</span>
-              </button>
+            <div className="grid grid-cols-3 gap-2.5">
+              {[
+                { id: 'efectivo' as PaymentMethod, label: 'Efectivo', icon: Banknote },
+                { id: 'datafono' as PaymentMethod, label: 'Datáfono', icon: CreditCard },
+                { id: 'fiado' as PaymentMethod, label: 'Fiado', icon: BookOpen },
+              ].map((m) => {
+                const Icon = m.icon;
+                const active = method === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setMethod(m.id)}
+                    className={`min-h-[64px] p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer ${
+                      active
+                        ? isDark
+                          ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
+                          : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
+                        : isDark
+                        ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA]'
+                        : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]'
+                    }`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="text-sm">{m.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Registros Especiales Separados: Donativo vs Cortesía / Consumo Interno */}
-          <div className="pt-2 border-t border-slate-800 space-y-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-              Registros Especiales (Separados)
-            </label>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMethod('donativo')}
-                className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
-                  method === 'donativo'
-                    ? 'bg-pink-600/30 border-pink-500 text-white ring-1 ring-pink-500'
-                    : 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                }`}
-              >
-                <Heart className={`w-5 h-5 shrink-0 mt-0.5 ${method === 'donativo' ? 'text-pink-400' : 'text-pink-500/70'}`} />
-                <div>
-                  <div className="text-xs font-bold text-pink-300">🕊️ Registrar Donativo</div>
-                  <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
-                    Ofrenda voluntaria a fondos de la iglesia.
-                  </p>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setMethod('consumo_interno')}
-                className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex items-start gap-2.5 ${
-                  method === 'consumo_interno'
-                    ? 'bg-purple-600/30 border-purple-500 text-white ring-1 ring-purple-500'
-                    : 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                }`}
-              >
-                <Coffee className={`w-5 h-5 shrink-0 mt-0.5 ${method === 'consumo_interno' ? 'text-purple-400' : 'text-purple-500/70'}`} />
-                <div>
-                  <div className="text-xs font-bold text-purple-300">☕ Cortesía / Consumo</div>
-                  <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
-                    Equipo o mermas (sin cobro monetario).
-                  </p>
-                </div>
-              </button>
-            </div>
+          {/* Registros Especiales */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {[
+              { id: 'donativo' as PaymentMethod, label: 'Donativo', icon: Heart },
+              { id: 'consumo_interno' as PaymentMethod, label: 'Cortesía / Interno', icon: Coffee },
+            ].map((m) => {
+              const Icon = m.icon;
+              const active = method === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMethod(m.id)}
+                  className={`min-h-[48px] px-3.5 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-sm font-medium transition cursor-pointer ${
+                    active
+                      ? isDark
+                        ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
+                        : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
+                      : isDark
+                      ? 'bg-[#211D1A] border-[#2A2420] text-[#9A9086] hover:text-[#F4F0EA]'
+                      : 'bg-[#EFECE6] border-[#E2DDD5] text-[#6E665E] hover:text-[#141210]'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {method === 'efectivo' && (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <ChangeCalculator total={total} tendered={tendered} onTenderedChange={setTendered} />
               {tendered > total && (
                 <Button
                   type="button"
-                  title="Convertir cambio en Donativo"
                   variant="outline"
                   disabled={isSubmitting}
                   isLoading={isSubmitting}
-                  className="w-full border-pink-500/60 bg-pink-950/20 hover:bg-pink-900/30 text-pink-300 hover:text-pink-200 font-bold transition flex items-center justify-center gap-2"
+                  className="w-full"
                   onClick={handleConvertChangeToDonation}
+                  icon={<Heart className="w-4 h-4" />}
                 >
-                  <Heart className="w-4 h-4 text-pink-400 shrink-0" aria-hidden="true" />
-                  Convertir cambio en Donativo
+                  Convertir cambio ({(tendered - total).toFixed(2)} €) en Donativo
                 </Button>
               )}
             </div>
           )}
 
           {method === 'datafono' && (
-            <div className="p-3 bg-sky-950/20 border border-sky-500/30 rounded-xl flex items-center justify-between text-xs">
-              <span className="text-slate-300">Cobro con Datáfono / Tarjeta:</span>
-              <strong className="text-sky-300 font-bold text-sm">{total.toFixed(2)}€</strong>
+            <div
+              className={`p-4 rounded-2xl border flex items-center justify-between text-sm ${
+                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+              }`}
+            >
+              <span>Cobro con Datáfono / Tarjeta:</span>
+              <strong className="text-base font-bold tabular-nums">{total.toFixed(2)} €</strong>
             </div>
           )}
 
           {method === 'fiado' && (
-            <div className="p-2.5 bg-slate-800/40 border border-slate-700 rounded-xl space-y-1.5">
-              <label className="text-xs text-slate-300">Hermano / Cliente de Fiados</label>
+            <div
+              className={`p-4 rounded-2xl border space-y-2 ${
+                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+              }`}
+            >
+              <label className="text-sm font-medium block">Seleccionar Hermano / Cliente</label>
               <select
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white"
+                className={`w-full min-h-[48px] rounded-xl px-3 text-base font-medium border ${
+                  isDark
+                    ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+                    : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
+                }`}
               >
                 {customers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.churchGroup}) - Saldo: {c.balance.toFixed(2)}€</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.churchGroup}) · Saldo: {c.balance.toFixed(2)} €
+                  </option>
                 ))}
               </select>
             </div>
           )}
 
-          {method === 'donativo' && (
-            <div className="p-3 bg-pink-950/20 border border-pink-500/30 rounded-xl space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-pink-300">
-                <Heart className="w-4 h-4 text-pink-400" />
-                Ofrenda / Donación a la Obra
-              </div>
-              <p className="text-[11px] text-slate-300">
-                Se registrará un ingreso de <strong className="text-pink-300">{total.toFixed(2)}€</strong> como donativo pro-fondos.
-              </p>
+          {(method === 'donativo' || method === 'consumo_interno') && (
+            <div
+              className={`p-4 rounded-2xl border space-y-2 ${
+                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+              }`}
+            >
+              <label className="text-sm font-medium block">
+                {method === 'donativo' ? 'Nota de Donativo (Opcional)' : 'Motivo / Autorizado por'}
+              </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Nota opcional (ej. Ofrenda pro-templo, donativo libre)..."
-                className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white"
-              />
-            </div>
-          )}
-
-          {method === 'consumo_interno' && (
-            <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-xl space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-300">
-                <Coffee className="w-4 h-4 text-purple-400" />
-                Cortesía / Consumo Interno Autorizado
-              </div>
-              <p className="text-[11px] text-slate-300">
-                No se requiere dinero en caja. Los insumos se descuentan del stock para consumo del equipo de turno o merma autorizada.
-              </p>
-              <input
-                type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Motivo / Autorizado por (ej. Equipo de alabanza, limpieza)..."
-                className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white"
+                placeholder="Escribir nota..."
+                className={`w-full min-h-[48px] rounded-xl px-3.5 text-base border ${
+                  isDark
+                    ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+                    : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
+                }`}
               />
             </div>
           )}
 
           <Button
-            variant="success"
-            size="lg"
+            variant="primary"
+            size="xl"
             disabled={isSubmitting}
             isLoading={isSubmitting}
-            className="w-full font-bold shadow-lg"
+            className="w-full"
             onClick={handleConfirm}
           >
             {method === 'consumo_interno'
               ? 'Registrar Cortesía / Consumo'
               : method === 'donativo'
-              ? 'Confirmar Registro de Donativo'
-              : t('payment.confirm')}
+              ? 'Confirmar Donativo'
+              : `${t('payment.confirm')} · ${total.toFixed(2)} €`}
           </Button>
         </div>
       )}

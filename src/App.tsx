@@ -110,14 +110,21 @@ const App: React.FC = () => {
                 }
               />
 
-              {/* Historial de Ventas & Anulación */}
-              <Route path="/historial" element={<SalesHistoryScreen />} />
+              {/* Historial de Ventas & Anulación (RBAC: Pastor, Tesorería, super_admin) */}
+              <Route
+                path="/historial"
+                element={
+                  <ProtectedRoute allowedRoles={['Pastor', 'Tesorería', 'super_admin']}>
+                    <SalesHistoryScreen />
+                  </ProtectedRoute>
+                }
+              />
 
-              {/* Inventario Compuesto (RBAC: Tesorería y Pastor) */}
+              {/* Inventario Compuesto (RBAC: Tesorería, Pastor, super_admin) */}
               <Route
                 path="/inventory"
                 element={
-                  <ProtectedRoute allowedRoles={['Tesorería', 'Pastor']}>
+                  <ProtectedRoute allowedRoles={['Tesorería', 'Pastor', 'super_admin']}>
                     <InventoryScreen />
                   </ProtectedRoute>
                 }
@@ -126,11 +133,11 @@ const App: React.FC = () => {
               {/* Fiados & Cuentas */}
               <Route path="/tabs" element={<TabsScreen />} />
 
-              {/* Cierre de Caja (RBAC: Vendedor, Tesorería, Pastor) */}
+              {/* Cierre de Caja (RBAC: Vendedor, Tesorería, Pastor, super_admin) */}
               <Route
                 path="/closeout"
                 element={
-                  <ProtectedRoute allowedRoles={['Vendedor', 'Tesorería', 'Pastor']}>
+                  <ProtectedRoute allowedRoles={['Vendedor', 'Tesorería', 'Pastor', 'super_admin']}>
                     <CloseoutScreen />
                   </ProtectedRoute>
                 }

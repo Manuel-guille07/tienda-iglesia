@@ -3,10 +3,14 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useTabStore } from '../../store/useTabStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import toast from 'react-hot-toast';
 
 export const NewCustomerModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const { addCustomer } = useTabStore();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('+34');
@@ -31,13 +35,55 @@ export const NewCustomerModal: React.FC<{ isOpen: boolean; onClose: () => void }
     }
   };
 
+  const inputClasses = `w-full min-h-[48px] rounded-2xl px-4 py-2.5 text-base border focus:outline-none ${
+    isDark
+      ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] placeholder-[#9A9086] focus:border-[#EFECE6]'
+      : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] placeholder-[#6E665E] focus:border-[#141210]'
+  }`;
+
   return (
     <Modal isOpen={isOpen} onClose={() => !isSubmitting && onClose()} title={t('tabs.newCustomer')}>
-      <div className="space-y-2">
-        <input type="text" placeholder="Nombre completo" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-sm text-white" />
-        <input type="text" placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-sm text-white" />
-        <input type="text" placeholder="Ministerio" value={group} onChange={(e) => setGroup(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-sm text-white" />
-        <Button variant="primary" size="lg" disabled={isSubmitting} isLoading={isSubmitting} className="w-full font-bold mt-2" onClick={handleCreate}>Crear</Button>
+      <div className="space-y-3">
+        <div>
+          <label className="text-sm font-medium block mb-1">Nombre completo</label>
+          <input
+            type="text"
+            placeholder="Nombre y apellidos"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={inputClasses}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium block mb-1">Teléfono (WhatsApp)</label>
+          <input
+            type="text"
+            placeholder="+34 600 000 000"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className={inputClasses}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium block mb-1">Ministerio / Grupo</label>
+          <input
+            type="text"
+            placeholder="Congregación"
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            className={inputClasses}
+          />
+        </div>
+        <Button
+          variant="primary"
+          size="xl"
+          disabled={isSubmitting}
+          isLoading={isSubmitting}
+          className="w-full mt-2"
+          onClick={handleCreate}
+        >
+          Guardar Cliente
+        </Button>
       </div>
     </Modal>
   );

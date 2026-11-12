@@ -3,6 +3,7 @@ import { ChevronDown, Check } from 'lucide-react';
 import { User } from '../../types';
 import { UserAvatarIcon } from './UserAvatarIcon';
 import { Badge } from './Badge';
+import { useTheme } from '../../context/ThemeContext';
 
 interface UserSelectDropdownProps {
   users: User[];
@@ -19,6 +20,8 @@ export const UserSelectDropdown: React.FC<UserSelectDropdownProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -51,15 +54,21 @@ export const UserSelectDropdown: React.FC<UserSelectDropdownProps> = ({
         type="button"
         disabled={disabled || users.length === 0}
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`w-full px-3.5 py-2.5 bg-slate-950 border ${
-          isOpen ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-800 hover:border-slate-700'
-        } rounded-2xl text-left flex items-center justify-between gap-3 transition cursor-pointer shadow-inner disabled:opacity-50`}
+        className={`w-full min-h-[56px] px-4 py-3 rounded-3xl text-left flex items-center justify-between gap-3 transition cursor-pointer disabled:opacity-50 border ${
+          isDark
+            ? isOpen
+              ? 'bg-[#211D1A] border-[#EFECE6] text-[#F4F0EA]'
+              : 'bg-[#211D1A] border-[#2A2420] hover:border-[#3D352F] text-[#F4F0EA]'
+            : isOpen
+            ? 'bg-[#EFECE6] border-[#141210] text-[#141210]'
+            : 'bg-[#EFECE6] border-[#E2DDD5] hover:border-[#CFC8BC] text-[#141210]'
+        }`}
       >
         {activeUser ? (
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3.5 min-w-0">
             <UserAvatarIcon icon={activeUser.avatar} size="md" />
             <div className="min-w-0">
-              <p className="text-sm font-bold text-white truncate">{activeUser.name}</p>
+              <p className="text-base font-semibold truncate">{activeUser.name}</p>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Badge variant={getRoleBadgeVariant(activeUser.role)} size="sm">
                   {activeUser.role}
@@ -68,18 +77,26 @@ export const UserSelectDropdown: React.FC<UserSelectDropdownProps> = ({
             </div>
           </div>
         ) : (
-          <span className="text-xs text-slate-400">Selecciona un usuario</span>
+          <span className={`text-sm ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+            Selecciona un usuario
+          </span>
         )}
 
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${
-            isOpen ? 'rotate-180 text-indigo-400' : ''
-          }`}
+          className={`w-5 h-5 shrink-0 transition-transform duration-200 ${
+            isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+          } ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
       {isOpen && users.length > 0 && (
-        <div className="absolute left-0 right-0 mt-2 bg-slate-900/95 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl shadow-black/80 py-1.5 z-50 max-h-64 overflow-y-auto divide-y divide-slate-800/60">
+        <div
+          className={`absolute left-0 right-0 mt-2 rounded-3xl shadow-2xl py-2 z-50 max-h-72 overflow-y-auto border ${
+            isDark
+              ? 'bg-[#171412] border-[#2A2420] divide-y divide-[#2A2420]'
+              : 'bg-[#FAF8F5] border-[#E2DDD5] divide-y divide-[#E2DDD5]'
+          }`}
+        >
           {users.map((u) => {
             const isSelected = activeUser?.id === u.id;
             return (
@@ -90,16 +107,20 @@ export const UserSelectDropdown: React.FC<UserSelectDropdownProps> = ({
                   onSelect(u);
                   setIsOpen(false);
                 }}
-                className={`w-full px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition cursor-pointer ${
-                  isSelected
-                    ? 'bg-indigo-600/15 text-white'
-                    : 'hover:bg-slate-800/80 text-slate-200'
+                className={`w-full min-h-[56px] px-4 py-3 flex items-center justify-between gap-3 text-left transition cursor-pointer ${
+                  isDark
+                    ? isSelected
+                      ? 'bg-[#211D1A] text-[#F4F0EA]'
+                      : 'hover:bg-[#211D1A]/70 text-[#F4F0EA]'
+                    : isSelected
+                    ? 'bg-[#EFECE6] text-[#141210]'
+                    : 'hover:bg-[#EFECE6]/70 text-[#141210]'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3.5 min-w-0">
                   <UserAvatarIcon icon={u.avatar} size="md" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{u.name}</p>
+                    <p className="text-base font-medium truncate">{u.name}</p>
                     <div className="mt-0.5">
                       <Badge variant={getRoleBadgeVariant(u.role)} size="sm">
                         {u.role}
@@ -109,8 +130,12 @@ export const UserSelectDropdown: React.FC<UserSelectDropdownProps> = ({
                 </div>
 
                 {isSelected && (
-                  <span className="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shrink-0">
-                    <Check className="w-3.5 h-3.5 text-indigo-400" />
+                  <span
+                    className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                      isDark ? 'bg-[#EFECE6] text-[#141210]' : 'bg-[#141210] text-[#FAF8F5]'
+                    }`}
+                  >
+                    <Check className="w-4 h-4" />
                   </span>
                 )}
               </button>
