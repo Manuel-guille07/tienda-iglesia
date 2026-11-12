@@ -726,6 +726,9 @@ export async function upsertProfile(profile: Record<string, any>) {
 
     if (error) {
       console.warn('[Supabase] upsertProfile warning:', error.message);
+      if (error.code === '42501' || error.code === '401' || error.message.includes('row-level security') || error.message.includes('policy')) {
+        throw new Error('Error RLS (42501): Permisos insuficientes en la tabla profiles. Verifica las políticas de seguridad o inicia sesión como super_admin.');
+      }
       throw error;
     }
     return data && data[0] ? fromProfileSnake(data[0]) : null;

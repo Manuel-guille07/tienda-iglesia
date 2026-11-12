@@ -153,7 +153,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({ isLoading: true });
 
-    // Verificación estricta del PIN del usuario seleccionado
+    // Verificación estricta del PIN del usuario seleccionado contra la tabla profiles
     if (selectedUserForPin.pin !== pin) {
       set({ isLoading: false });
       return { success: false, message: 'PIN incorrecto. Inténtalo de nuevo.' };
@@ -161,22 +161,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Guardar ID en sessionStorage para persistencia en recargas (F5)
     sessionStorage.setItem('elarx_active_user_id', selectedUserForPin.id);
-
-    // Intento opcional de autenticación en Supabase Auth con PIN como contraseña
-    const internalEmail = getUserInternalEmail(selectedUserForPin);
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: internalEmail,
-        password: pin,
-      });
-
-      if (error) {
-        console.info(`[Auth Híbrido] Fallback local activo para ${internalEmail}:`, error.message);
-      }
-    } catch (authErr) {
-      console.info('[Auth Híbrido] Excepción en llamada Supabase Auth, continuando con perfil activo:', authErr);
-    }
 
     set({
       currentUser: selectedUserForPin,
