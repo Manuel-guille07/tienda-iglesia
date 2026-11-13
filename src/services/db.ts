@@ -50,10 +50,22 @@ export function generateUUID(): string {
 // 1. RAW MATERIALS
 // Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available, category, is_sellable, is_quick_access, price, quick_color
 const VALID_QUICK_COLORS = ['default', 'sage', 'slate', 'terracotta', 'amber', 'mauve'];
+const HEX_COLOR_REGEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 export function sanitizeQuickColor(raw?: any): string {
   if (!raw || typeof raw !== 'string') return 'default';
-  const cleaned = raw.trim().toLowerCase();
+  const trimmed = raw.trim();
+  if (!trimmed) return 'default';
+  if (HEX_COLOR_REGEX.test(trimmed)) {
+    if (trimmed.length === 4) {
+      const r = trimmed[1];
+      const g = trimmed[2];
+      const b = trimmed[3];
+      return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+    }
+    return trimmed.toUpperCase();
+  }
+  const cleaned = trimmed.toLowerCase();
   return VALID_QUICK_COLORS.includes(cleaned) ? cleaned : 'default';
 }
 

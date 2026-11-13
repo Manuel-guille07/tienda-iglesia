@@ -150,15 +150,16 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                     <input
                       type="number"
                       step="any"
-                      min="0.1"
+                      min="0"
                       value={Number.isFinite(item.quantity) ? item.quantity : ''}
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => {
                         const parsed = parseFloat(e.target.value);
                         const u = [...items];
                         u[idx].quantity = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
                         setItems(u);
                       }}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white text-center font-bold"
+                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white text-center font-bold tabular-nums"
                     />
                     <span className="text-[10px] text-slate-400 truncate">{mat?.unit || 'uds'}</span>
                   </div>

@@ -4,7 +4,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { RawMaterial, Category, QuickColor } from '../../types';
-import { Check } from 'lucide-react';
+import { Palette, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AddRawMaterialModalProps {
@@ -13,48 +13,21 @@ interface AddRawMaterialModalProps {
   initialMaterial?: RawMaterial | null;
 }
 
-export const QUIET_LUXURY_QUICK_COLORS: {
-  id: QuickColor;
-  label: string;
-  hint: string;
-  swatchClass: string;
-}[] = [
-  {
-    id: 'default',
-    label: 'Piedra / Café',
-    hint: 'Estándar neutro',
-    swatchClass: 'bg-[#7A6F64]',
-  },
-  {
-    id: 'sage',
-    label: 'Verde Salvia',
-    hint: 'Tés y saludables',
-    swatchClass: 'bg-emerald-600',
-  },
-  {
-    id: 'slate',
-    label: 'Azul Pizarra',
-    hint: 'Agua y bebidas frías',
-    swatchClass: 'bg-sky-600',
-  },
-  {
-    id: 'terracotta',
-    label: 'Rojo Ladrillo',
-    hint: 'Postres y dulces',
-    swatchClass: 'bg-rose-600',
-  },
-  {
-    id: 'amber',
-    label: 'Ámbar / Mostaza',
-    hint: 'Bollería y panadería',
-    swatchClass: 'bg-amber-600',
-  },
-  {
-    id: 'mauve',
-    label: 'Malva / Púrpura',
-    hint: 'Especiales y donativos',
-    swatchClass: 'bg-purple-600',
-  },
+const LEGACY_TOKEN_TO_HEX: Record<string, string> = {
+  sage: '#059669',
+  slate: '#0284C7',
+  terracotta: '#E11D48',
+  amber: '#D97706',
+  mauve: '#7C3AED',
+};
+
+const QUICK_HEX_SUGGESTIONS: { hex: string; label: string }[] = [
+  { hex: '#8B5E34', label: 'Espresso' },
+  { hex: '#059669', label: 'Salvia' },
+  { hex: '#0284C7', label: 'Pizarra' },
+  { hex: '#F40009', label: 'Rojo' },
+  { hex: '#D97706', label: 'Ámbar' },
+  { hex: '#7C3AED', label: 'Malva' },
 ];
 
 export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
@@ -70,9 +43,9 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
   const [unit, setUnit] = useState<RawMaterial['unit']>('unidades');
   const [currentStock, setCurrentStock] = useState<number>(50);
   const [minStock, setMinStock] = useState<number>(10);
-  const [costPerUnit, setCostPerUnit] = useState<number>(0.10);
-  const [price, setPrice] = useState<number>(1.50);
-  const [category, setCategory] = useState<Category>('cafeteria');
+  const [costPerUnit, setCostPerUnit] = useState<number>(0.1);
+  const [price, setPrice] = useState<number>(1.5);
+  const [category, setCategory] = useState<Category>('Cafés');
   const [isSellable, setIsSellable] = useState<boolean>(true);
   const [isQuickAccess, setIsQuickAccess] = useState<boolean>(false);
   const [quickColor, setQuickColor] = useState<QuickColor>('default');
@@ -90,22 +63,26 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
         initialMaterial.price ??
           (initialMaterial.costPerUnit > 0
             ? Number((initialMaterial.costPerUnit * 2).toFixed(2))
-            : 1.50)
+            : 1.5)
       );
       setCategory(initialMaterial.category || 'cafeteria');
       setIsSellable(initialMaterial.isSellable !== false);
       setIsQuickAccess(Boolean(initialMaterial.isQuickAccess));
-      setQuickColor(
-        (initialMaterial.quickColor || initialMaterial.quick_color || 'default') as QuickColor
-      );
+
+      const rawColor = initialMaterial.quickColor || initialMaterial.quick_color || 'default';
+      if (rawColor !== 'default' && LEGACY_TOKEN_TO_HEX[rawColor]) {
+        setQuickColor(LEGACY_TOKEN_TO_HEX[rawColor]);
+      } else {
+        setQuickColor(rawColor);
+      }
     } else {
       setName('');
       setUnit('unidades');
       setCurrentStock(50);
       setMinStock(10);
-      setCostPerUnit(0.10);
-      setPrice(1.50);
-      setCategory('cafeteria');
+      setCostPerUnit(0.1);
+      setPrice(1.5);
+      setCategory('Cafés');
       setIsSellable(true);
       setIsQuickAccess(false);
       setQuickColor('default');
@@ -133,7 +110,9 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
       isNaN(costPerUnit) ||
       costPerUnit < 0
     ) {
-      toast.error('El stock, alerta mínima y coste unitario deben ser números válidos mayores o iguales a 0');
+      toast.error(
+        'El stock, alerta mínima y coste unitario deben ser números válidos mayores o iguales a 0'
+      );
       return;
     }
 
@@ -141,6 +120,8 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
       toast.error('El precio de venta para productos visibles en POS debe ser mayor a 0.00€');
       return;
     }
+
+    const finalQuickColor = isSellable ? quickColor : 'default';
 
     setIsSubmitting(true);
     try {
@@ -155,8 +136,8 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
           category,
           isSellable,
           isQuickAccess,
-          quickColor: isSellable ? quickColor : 'default',
-          quick_color: isSellable ? quickColor : 'default',
+          quickColor: finalQuickColor,
+          quick_color: finalQuickColor,
         });
         toast.success(`Producto "${cleanName}" actualizado correctamente`);
       } else {
@@ -170,8 +151,8 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
           category,
           isSellable,
           isQuickAccess,
-          quickColor: isSellable ? quickColor : 'default',
-          quick_color: isSellable ? quickColor : 'default',
+          quickColor: finalQuickColor,
+          quick_color: finalQuickColor,
           isOutOfStock: false,
         });
         toast.success(`Insumo "${cleanName}" añadido correctamente`);
@@ -190,8 +171,11 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
   }`;
 
   const labelClasses = `text-xs font-semibold block mb-1.5 ${
-    isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+    isDark ? 'text-[#9A9086]' : 'text-[#141210]'
   }`;
+
+  const isHexActive = quickColor !== 'default' && /^#[0-9A-F]{6}$/i.test(String(quickColor));
+  const pickerHexValue = isHexActive ? String(quickColor) : '#8B5E34';
 
   return (
     <Modal
@@ -207,7 +191,7 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="ej. Café con Leche, Agua Mineral, Croissant..."
+            placeholder="ej. Capuchino, Agua Mineral, Croissant..."
             className={inputClasses}
           />
         </div>
@@ -226,9 +210,11 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               }}
               className={inputClasses}
             >
+              <option value="Cafés">Cafés</option>
               <option value="cafeteria">Cafetería</option>
               <option value="bebidas">Bebidas</option>
               <option value="snacks">Snacks</option>
+              <option value="donativos">Donativos</option>
               <option value="insumos">Insumos / Desechables</option>
             </select>
           </div>
@@ -254,9 +240,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             <label className={labelClasses}>Coste Unitario (€)</label>
             <input
               type="number"
-              step="0.01"
+              step="any"
               min="0"
               value={Number.isFinite(costPerUnit) ? costPerUnit : ''}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => {
                 const parsed = parseFloat(e.target.value);
                 setCostPerUnit(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
@@ -271,10 +258,11 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             </label>
             <input
               type="number"
-              step="0.05"
-              min="0.01"
+              step="any"
+              min="0"
               disabled={!isSellable}
               value={Number.isFinite(price) ? price : ''}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => {
                 const parsed = parseFloat(e.target.value);
                 setPrice(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
@@ -289,9 +277,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             <label className={labelClasses}>Stock Inicial</label>
             <input
               type="number"
-              step="1"
+              step="any"
               min="0"
               value={Number.isFinite(currentStock) ? currentStock : ''}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => {
                 const parsed = parseFloat(e.target.value);
                 setCurrentStock(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
@@ -304,9 +293,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             <label className={labelClasses}>Alerta Stock Mínimo</label>
             <input
               type="number"
-              step="1"
+              step="any"
               min="0"
               value={Number.isFinite(minStock) ? minStock : ''}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => {
                 const parsed = parseFloat(e.target.value);
                 setMinStock(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
@@ -333,7 +323,7 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               <span className="text-sm font-semibold block">Mostrar en pantalla de ventas POS</span>
               <span
                 className={`text-xs block ${
-                  isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+                  isDark ? 'text-[#9A9086]' : 'text-[#4A433D]'
                 }`}
               >
                 Visible para ser cobrado en el mostrador
@@ -361,7 +351,7 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               <span className="text-sm font-semibold block">Añadir a Botones Rápidos</span>
               <span
                 className={`text-xs block ${
-                  isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+                  isDark ? 'text-[#9A9086]' : 'text-[#4A433D]'
                 }`}
               >
                 Acceso directo de 1 toque en el panel superior del POS
@@ -376,65 +366,123 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
             />
           </div>
 
-          {/* Selector de Color Curado Quiet Luxury (Visible cuando is_sellable = true) */}
+          {/* Selector Hexadecimal Exacto (Visible cuando is_sellable = true) */}
           {isSellable && (
             <div
-              className={`p-3.5 rounded-2xl border space-y-2.5 ${
+              className={`p-3.5 rounded-2xl border space-y-3 ${
                 isDark
                   ? 'bg-[#211D1A] border-[#2A2420]'
                   : 'bg-[#EFECE6] border-[#E2DDD5]'
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="text-sm font-semibold block">
-                    Color Semántico en Botones Rápidos
+                  <span className="text-sm font-semibold flex items-center gap-1.5">
+                    <Palette className="w-4 h-4 shrink-0" />
+                    Color Cristal (HEX) en Botones Rápidos
                   </span>
                   <span
-                    className={`text-xs block ${
-                      isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+                    className={`text-xs block mt-0.5 ${
+                      isDark ? 'text-[#9A9086]' : 'text-[#4A433D]'
                     }`}
                   >
-                    Tinte sutil exclusivo para el teclado rápido (el catálogo se mantiene neutro)
+                    Elige cualquier color exacto para el efecto Glassmorphism del botón rápido
                   </span>
                 </div>
+
+                {quickColor !== 'default' && (
+                  <button
+                    type="button"
+                    onClick={() => setQuickColor('default')}
+                    className={`px-2.5 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1 cursor-pointer shrink-0 ${
+                      isDark
+                        ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA] hover:border-[#3D352F]'
+                        : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210] hover:border-[#141210]'
+                    }`}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Neutro
+                  </button>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                {QUIET_LUXURY_QUICK_COLORS.map((c) => {
-                  const isSelected = quickColor === c.id;
+              {/* Control Nativo Color + Input HEX Editable */}
+              <div className="flex items-center gap-2.5">
+                <label
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border cursor-pointer flex-1 min-h-[48px] ${
+                    isDark
+                      ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+                      : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
+                  }`}
+                >
+                  <input
+                    type="color"
+                    value={pickerHexValue}
+                    onChange={(e) => setQuickColor(e.target.value.toUpperCase())}
+                    aria-label="Selector de color HEX para botón rápido"
+                    className="w-9 h-9 rounded-lg border-0 bg-transparent cursor-pointer shrink-0 p-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs font-semibold block">
+                      {quickColor === 'default' ? 'Neutro Quiet Luxury' : 'Color Cristal Activo'}
+                    </span>
+                    <span
+                      className={`text-xs font-mono uppercase block ${
+                        isDark ? 'text-[#9A9086]' : 'text-[#4A433D]'
+                      }`}
+                    >
+                      {quickColor === 'default' ? 'default' : String(quickColor).toUpperCase()}
+                    </span>
+                  </div>
+                </label>
+
+                <input
+                  type="text"
+                  value={quickColor === 'default' ? '' : String(quickColor)}
+                  placeholder="#F40009"
+                  maxLength={7}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    if (!val) {
+                      setQuickColor('default');
+                    } else {
+                      setQuickColor(val.startsWith('#') ? val.toUpperCase() : `#${val.toUpperCase()}`);
+                    }
+                  }}
+                  aria-label="Código hexadecimal"
+                  className={`w-28 min-h-[48px] rounded-xl px-3 text-sm font-mono uppercase font-semibold border focus:outline-none ${
+                    isDark
+                      ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA] focus:border-[#EFECE6]'
+                      : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210] focus:border-[#141210]'
+                  }`}
+                />
+              </div>
+
+              {/* Sugerencias Rápidas HEX */}
+              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                {QUICK_HEX_SUGGESTIONS.map((s) => {
+                  const selected = String(quickColor).toUpperCase() === s.hex;
                   return (
                     <button
-                      key={c.id}
+                      key={s.hex}
                       type="button"
-                      onClick={() => setQuickColor(c.id)}
-                      className={`min-h-[46px] px-3 py-2 rounded-xl border text-left flex items-center gap-2.5 transition cursor-pointer select-none ${
-                        isSelected
+                      onClick={() => setQuickColor(s.hex)}
+                      title={`${s.label} (${s.hex})`}
+                      className={`px-2.5 py-1.5 rounded-full border text-xs font-medium flex items-center gap-1.5 cursor-pointer transition ${
+                        selected
                           ? isDark
-                            ? 'bg-[#171412] border-[#EFECE6] ring-1 ring-[#EFECE6]'
-                            : 'bg-[#FAF8F5] border-[#141210] ring-1 ring-[#141210]'
+                            ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
+                            : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
                           : isDark
-                          ? 'bg-[#171412]/60 border-[#2A2420] hover:border-[#3D352F]'
-                          : 'bg-[#FAF8F5]/80 border-[#E2DDD5] hover:border-[#CFC8BC]'
+                          ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+                          : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
                       }`}
                     >
                       <span
-                        className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-white shadow-inner ${c.swatchClass}`}
-                      >
-                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="text-xs font-semibold block truncate leading-tight">
-                          {c.label}
-                        </span>
-                        <span
-                          className={`text-[10px] block truncate ${
-                            isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-                          }`}
-                        >
-                          {c.hint}
-                        </span>
-                      </div>
+                        className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/15"
+                        style={{ backgroundColor: s.hex }}
+                      />
+                      <span>{s.label}</span>
                     </button>
                   );
                 })}

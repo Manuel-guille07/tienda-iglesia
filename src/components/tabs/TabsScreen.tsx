@@ -238,10 +238,11 @@ export const TabsScreen: React.FC = () => {
             </label>
             <input
               type="number"
-              step="0.50"
-              min="0.01"
+              step="any"
+              min="0"
               max={action === 'pay' && cust ? cust.debt : undefined}
-              value={Number.isFinite(amount) ? amount || '' : ''}
+              value={Number.isFinite(amount) ? amount : ''}
+              onFocus={(e) => e.target.select()}
               onChange={(e) => {
                 const parsed = parseFloat(e.target.value);
                 const safeVal = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;

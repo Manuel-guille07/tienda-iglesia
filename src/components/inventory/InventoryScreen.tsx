@@ -91,10 +91,19 @@ export const InventoryScreen: React.FC = () => {
 
   const getCategoryLabel = (cat?: string) => {
     switch (cat) {
-      case 'bebidas': return 'Bebidas';
-      case 'snacks': return 'Snacks';
-      case 'insumos': return 'Insumos / Desechables';
-      default: return 'Cafetería';
+      case 'Cafés':
+      case 'cafes':
+        return 'Cafés';
+      case 'bebidas':
+        return 'Bebidas';
+      case 'snacks':
+        return 'Snacks';
+      case 'donativos':
+        return 'Donativos';
+      case 'insumos':
+        return 'Insumos / Desechables';
+      default:
+        return 'Cafetería';
     }
   };
 
@@ -359,13 +368,15 @@ export const InventoryScreen: React.FC = () => {
         <div className="space-y-3">
           <input
             type="number"
-            min="1"
-            value={Number.isFinite(amount) ? amount || '' : ''}
+            step="any"
+            min="0"
+            value={Number.isFinite(amount) ? amount : ''}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => {
               const parsed = parseFloat(e.target.value);
               setAmount(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
             }}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-lg font-bold text-white focus:outline-none focus:border-indigo-500"
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-lg font-bold text-white focus:outline-none focus:border-indigo-500 tabular-nums"
           />
           <Button
             variant="success"

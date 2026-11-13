@@ -10,9 +10,24 @@ export interface User {
   isActive?: boolean;
 }
 
-export type Category = 'cafeteria' | 'bebidas' | 'snacks' | 'donativos' | 'merchandising' | 'insumos';
+export type Category =
+  | 'Cafés'
+  | 'cafes'
+  | 'cafeteria'
+  | 'bebidas'
+  | 'snacks'
+  | 'donativos'
+  | 'merchandising'
+  | 'insumos';
 
-export type QuickColor = 'default' | 'sage' | 'slate' | 'terracotta' | 'amber' | 'mauve';
+export type QuickColor =
+  | 'default'
+  | 'sage'
+  | 'slate'
+  | 'terracotta'
+  | 'amber'
+  | 'mauve'
+  | (string & {});
 
 export interface RawMaterial {
   id: string;
@@ -107,6 +122,13 @@ export interface Incident {
   category: 'caja' | 'maquinaria' | 'inventario' | 'otro';
 }
 
+export interface SoldItemSummary {
+  name: string;
+  quantity: number;
+  revenue: number;
+  category?: string;
+}
+
 export interface ShiftClose {
   id: string;
   timestamp: string;
@@ -129,6 +151,9 @@ export interface ShiftClose {
   tabPaymentsCash?: number;
   salesCard?: number;
   tabPaymentsCard?: number;
+  totalCafes?: number;
+  totalRestoCafeteria?: number;
+  soldItemsSummary?: SoldItemSummary[];
 }
 
 export type Language = 'es' | 'en';

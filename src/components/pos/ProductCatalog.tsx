@@ -22,6 +22,7 @@ export const ProductCatalog: React.FC = () => {
 
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'Todos' },
+    { id: 'Cafés', label: 'Cafés' },
     { id: 'cafeteria', label: 'Cafetería' },
     { id: 'bebidas', label: 'Bebidas' },
     { id: 'snacks', label: 'Snacks' },
@@ -37,9 +38,18 @@ export const ProductCatalog: React.FC = () => {
     return map;
   }, [cart]);
 
+  const normalizeCat = (c?: string) =>
+    (c || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
   const filteredProducts = products.filter((p) => {
     if (p.isSellable === false) return false;
-    const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
+    const matchesCategory =
+      selectedCategory === 'all' ||
+      normalizeCat(p.category) === normalizeCat(selectedCategory);
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -97,8 +107,8 @@ export const ProductCatalog: React.FC = () => {
                     ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold shadow-sm'
                     : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold shadow-sm'
                   : isDark
-                  ? 'bg-[#171412] border-[#2A2420] text-[#9A9086] hover:text-[#F4F0EA] hover:border-[#3D352F]'
-                  : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#6E665E] hover:text-[#141210] hover:border-[#CFC8BC]'
+                  ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]/80 hover:text-[#F4F0EA] hover:border-[#3D352F] shadow-sm'
+                  : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]/75 hover:text-[#141210] hover:border-[#CFC8BC]'
               }`}
             >
               {cat.label}
@@ -115,22 +125,22 @@ export const ProductCatalog: React.FC = () => {
           const isLow = stockInfo.status === 'low';
           const qtyInCart = cartQtyMap.get(product.id) || 0;
 
-          // Superficie y bordes Quiet Luxury según estado
+          // Superficie y bordes Quiet Luxury según estado (Modo oscuro con border-[#2A2420], bg-[#171412] y shadow-md)
           const surfaceClasses = isOut
             ? isDark
-              ? 'bg-[#171412]/50 border-rose-900/50 opacity-55 cursor-not-allowed'
-              : 'bg-[#FAF8F5]/60 border-rose-300 opacity-60 cursor-not-allowed'
+              ? 'bg-[#171412]/70 border border-rose-900/60 shadow-md shadow-black/40 opacity-55 cursor-not-allowed'
+              : 'bg-[#FAF8F5]/60 border border-rose-300 opacity-60 cursor-not-allowed'
             : qtyInCart > 0
             ? isDark
-              ? 'bg-[#171412] border-[#EFECE6] ring-1 ring-[#EFECE6]/50 cursor-pointer'
-              : 'bg-[#FAF8F5] border-[#141210] ring-1 ring-[#141210]/30 cursor-pointer'
+              ? 'bg-[#171412] border border-[#EFECE6] ring-1 ring-[#EFECE6]/50 shadow-md shadow-black/50 cursor-pointer'
+              : 'bg-[#FAF8F5] border border-[#141210] ring-1 ring-[#141210]/30 shadow-sm cursor-pointer'
             : isLow
             ? isDark
-              ? 'bg-[#171412] border-amber-600/60 hover:border-amber-500 cursor-pointer'
-              : 'bg-[#FAF8F5] border-amber-500/70 hover:border-amber-600 cursor-pointer'
+              ? 'bg-[#171412] border border-amber-500/50 hover:border-amber-400 shadow-md shadow-black/40 cursor-pointer'
+              : 'bg-[#FAF8F5] border border-amber-500/70 hover:border-amber-600 shadow-sm cursor-pointer'
             : isDark
-            ? 'bg-[#171412] border-[#2A2420] hover:border-[#3D352F] cursor-pointer'
-            : 'bg-[#FAF8F5] border-[#E2DDD5] hover:border-[#CFC8BC] cursor-pointer';
+            ? 'bg-[#171412] border border-[#2A2420] hover:border-[#4A4038] hover:bg-[#1D1916] shadow-md shadow-black/45 cursor-pointer'
+            : 'bg-[#FAF8F5] border border-[#E2DDD5] hover:border-[#CFC8BC] shadow-sm cursor-pointer';
 
           return (
             <div

@@ -64,9 +64,10 @@ export const ChangeCalculator: React.FC<ChangeCalculatorProps> = ({
           </label>
           <input
             type="number"
-            step="0.10"
+            step="any"
             min="0"
-            value={Number.isFinite(tendered) ? tendered || '' : ''}
+            value={Number.isFinite(tendered) ? tendered : ''}
+            onFocus={(e) => e.target.select()}
             onChange={(e) => {
               const parsed = parseFloat(e.target.value);
               const safeVal = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
