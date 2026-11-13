@@ -24,6 +24,7 @@ import {
   PrintableReportModal,
   exportSalesHistoryToCSV,
 } from '../common/PrintableReportModal';
+import { fromCents, toCents } from '../../utils/finance';
 import toast from 'react-hot-toast';
 
 export const DashboardScreen: React.FC = () => {
@@ -68,20 +69,36 @@ export const DashboardScreen: React.FC = () => {
     });
   }, [sales, currentMonth, currentYear]);
 
-  const monthlyRevenue = useMemo(
-    () => monthlySales.reduce((acc, s) => acc + (s.total || 0), 0),
-    [monthlySales]
-  );
-
-  const periodRevenue = useMemo(
-    () => filteredSales.reduce((acc, s) => acc + (s.total || 0), 0),
+  const cafeteriaSales = useMemo(
+    () =>
+      filteredSales.filter(
+        (s) => s.paymentMethod !== 'donativo' && s.paymentMethod !== 'consumo_interno'
+      ),
     [filteredSales]
   );
 
+  const cafeteriaMonthlySales = useMemo(
+    () =>
+      monthlySales.filter(
+        (s) => s.paymentMethod !== 'donativo' && s.paymentMethod !== 'consumo_interno'
+      ),
+    [monthlySales]
+  );
+
+  const monthlyRevenue = useMemo(
+    () => fromCents(cafeteriaMonthlySales.reduce((acc, s) => acc + toCents(s.total || 0), 0)),
+    [cafeteriaMonthlySales]
+  );
+
+  const periodRevenue = useMemo(
+    () => fromCents(cafeteriaSales.reduce((acc, s) => acc + toCents(s.total || 0), 0)),
+    [cafeteriaSales]
+  );
+
   const averageTicket = useMemo(() => {
-    if (filteredSales.length === 0) return 0;
-    return periodRevenue / filteredSales.length;
-  }, [filteredSales, periodRevenue]);
+    if (cafeteriaSales.length === 0) return 0;
+    return periodRevenue / cafeteriaSales.length;
+  }, [cafeteriaSales, periodRevenue]);
 
   const tabsStats = useMemo(() => {
     const totalDebt = customers.reduce((acc, c) => acc + (Number(c.debt) || 0), 0);
@@ -106,10 +123,11 @@ export const DashboardScreen: React.FC = () => {
 
     sales.forEach((s) => {
       if (!s.timestamp) return;
+      if (s.paymentMethod === 'donativo' || s.paymentMethod === 'consumo_interno') return;
       const key = s.timestamp.split('T')[0];
       const bucket = days.find((d) => d.dateKey === key);
       if (bucket) {
-        bucket.total += s.total || 0;
+        bucket.total = fromCents(toCents(bucket.total) + toCents(s.total || 0));
         bucket.count += 1;
       }
     });
@@ -129,12 +147,12 @@ export const DashboardScreen: React.FC = () => {
       { id: 'evening', label: 'Noche (20:00 - 24:00)', range: [20, 23], total: 0, count: 0 },
     ];
 
-    filteredSales.forEach((s) => {
+    cafeteriaSales.forEach((s) => {
       const d = s.timestamp ? new Date(s.timestamp) : new Date();
       const hour = isNaN(d.getTime()) ? 12 : d.getHours();
       const slot =
         slots.find((sl) => hour >= sl.range[0] && hour <= sl.range[1]) || slots[0];
-      slot.total += s.total || 0;
+      slot.total = fromCents(toCents(slot.total) + toCents(s.total || 0));
       slot.count += 1;
     });
 
@@ -143,12 +161,12 @@ export const DashboardScreen: React.FC = () => {
       ...s,
       pct: Math.round((s.total / maxSlotTotal) * 100),
     }));
-  }, [filteredSales]);
+  }, [cafeteriaSales]);
 
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; category: string; qty: number; revenue: number }>();
 
-    filteredSales.forEach((s) => {
+    cafeteriaSales.forEach((s) => {
       if (s.items && s.items.length > 0) {
         s.items.forEach((it) => {
           const id = it.product?.id || it.product?.name || 'item';
@@ -157,13 +175,13 @@ export const DashboardScreen: React.FC = () => {
           const price = it.customPrice ?? it.product?.price ?? 0;
           const prev = map.get(id) || { name, category, qty: 0, revenue: 0 };
           prev.qty += it.quantity;
-          prev.revenue += price * it.quantity;
+          prev.revenue = fromCents(toCents(prev.revenue) + toCents(price) * it.quantity);
           map.set(id, prev);
         });
       }
     });
 
-    if (map.size === 0 && filteredSales.length > 0 && products.length > 0) {
+    if (map.size === 0 && cafeteriaSales.length > 0 && products.length > 0) {
       const sellable = products.filter((p) => p.isSellable !== false).slice(0, 5);
       const weights = [0.34, 0.25, 0.18, 0.13, 0.10];
       sellable.forEach((p, idx) => {
@@ -190,26 +208,38 @@ export const DashboardScreen: React.FC = () => {
       rank: index + 1,
       pct: Math.round((p.qty / maxQty) * 100),
     }));
-  }, [filteredSales, products, periodRevenue]);
+  }, [cafeteriaSales, products, periodRevenue]);
 
   const paymentBreakdown = useMemo(() => {
-    const total = periodRevenue > 0 ? periodRevenue : 0;
-    const cashTotal = filteredSales
-      .filter((s) => s.paymentMethod === 'efectivo')
-      .reduce((a, s) => a + (s.total || 0), 0);
-    const cardTotal = filteredSales
-      .filter((s) => s.paymentMethod === 'datafono')
-      .reduce((a, s) => a + (s.total || 0), 0);
-    const tabTotal = filteredSales
-      .filter((s) => s.paymentMethod === 'fiado')
-      .reduce((a, s) => a + (s.total || 0), 0);
-    const donationTotal = filteredSales
-      .filter((s) => s.paymentMethod === 'donativo')
-      .reduce((a, s) => a + (s.total || 0), 0);
+    const cashTotal = fromCents(
+      filteredSales
+        .filter((s) => s.paymentMethod === 'efectivo')
+        .reduce((a, s) => a + toCents(s.total || 0), 0)
+    );
+    const cardTotal = fromCents(
+      filteredSales
+        .filter((s) => s.paymentMethod === 'datafono')
+        .reduce((a, s) => a + toCents(s.total || 0), 0)
+    );
+    const tabTotal = fromCents(
+      filteredSales
+        .filter((s) => s.paymentMethod === 'fiado')
+        .reduce((a, s) => a + toCents(s.total || 0), 0)
+    );
+    const donationTotal = fromCents(
+      filteredSales
+        .filter((s) => s.paymentMethod === 'donativo')
+        .reduce((a, s) => a + toCents(s.total || 0), 0)
+    );
 
-    const calcPct = (val: number) => (total > 0 ? Number(((val / total) * 100).toFixed(1)) : 0);
+    const totalAllOps = fromCents(
+      toCents(cashTotal) + toCents(cardTotal) + toCents(tabTotal) + toCents(donationTotal)
+    );
+    const calcPct = (val: number) =>
+      totalAllOps > 0 ? Number(((val / totalAllOps) * 100).toFixed(1)) : 0;
 
     return {
+      totalAllOps,
       cash: {
         label: 'Efectivo',
         amount: cashTotal,
@@ -243,7 +273,7 @@ export const DashboardScreen: React.FC = () => {
         textColor: isDark ? 'text-purple-300' : 'text-purple-800',
       },
     };
-  }, [filteredSales, periodRevenue, isDark]);
+  }, [filteredSales, isDark]);
 
   const periodLabel =
     periodFilter === 'month'
@@ -363,7 +393,7 @@ export const DashboardScreen: React.FC = () => {
           </div>
           <div className={`flex items-center gap-2 text-xs mt-2 tabular-nums ${secondaryText}`}>
             <span className={`font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-800'}`}>
-              {monthlySales.length} ventas
+              {cafeteriaMonthlySales.length} ventas
             </span>
             <span aria-hidden="true">·</span>
             <span>Periodo activo: {periodRevenue.toFixed(2)} €</span>
@@ -384,7 +414,7 @@ export const DashboardScreen: React.FC = () => {
             {averageTicket.toFixed(2)} €
           </div>
           <div className={`flex items-center gap-2 text-xs mt-2 tabular-nums ${secondaryText}`}>
-            <span>{filteredSales.length} tickets emitidos</span>
+            <span>{cafeteriaSales.length} tickets emitidos</span>
             <span aria-hidden="true">·</span>
             <span>{periodLabel}</span>
           </div>
@@ -624,7 +654,7 @@ export const DashboardScreen: React.FC = () => {
                 </h2>
               </div>
               <span className={`text-xs font-semibold font-mono tabular-nums ${secondaryText}`}>
-                100% ({periodRevenue.toFixed(2)} €)
+                100% ({paymentBreakdown.totalAllOps.toFixed(2)} €)
               </span>
             </div>
 

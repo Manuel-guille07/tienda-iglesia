@@ -48,7 +48,8 @@ export function calculateSalesAccountingBreakdown(sales: Sale[]): {
 
   for (const sale of sales) {
     const items = sale.items || [];
-    const isRevenueSale = sale.paymentMethod !== 'consumo_interno';
+    const isRevenueSale =
+      sale.paymentMethod !== 'consumo_interno' && sale.paymentMethod !== 'donativo';
 
     if (items.length > 0) {
       let saleItemsRevenue = 0;
@@ -148,7 +149,9 @@ export function exportSalesHistoryToCSV(
   const dateStr = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
   const filename = `elarx-reporte-contable-${dateStr}.csv`;
 
-  const totalAmount = sales.reduce((acc, s) => acc + (s.total || 0), 0);
+  const totalAmount = sales
+    .filter((s) => s.paymentMethod !== 'consumo_interno' && s.paymentMethod !== 'donativo')
+    .reduce((acc, s) => acc + (s.total || 0), 0);
   const totalCash = sales
     .filter((s) => s.paymentMethod === 'efectivo')
     .reduce((acc, s) => acc + (s.total || 0), 0);
@@ -170,7 +173,7 @@ export function exportSalesHistoryToCSV(
     ['Periodo / Filtro', periodLabel],
     [''],
     ['RESUMEN EJECUTIVO', 'IMPORTE (€)'],
-    ['Total Ingresos Brutos', totalAmount.toFixed(2)],
+    ['Total Ventas Cafetería (Sin Donativos)', totalAmount.toFixed(2)],
     ['Total Cafés', totalCafes.toFixed(2)],
     ['Total Resto de Cafetería', totalRestoCafeteria.toFixed(2)],
     ['Total Efectivo', totalCash.toFixed(2)],

@@ -17,7 +17,7 @@ export const NewCustomerModal: React.FC<{ isOpen: boolean; onClose: () => void }
   const [group, setGroup] = useState('Congregación');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (isSubmitting) return;
     const cleanName = name.trim();
     if (!cleanName) {
@@ -26,10 +26,14 @@ export const NewCustomerModal: React.FC<{ isOpen: boolean; onClose: () => void }
     }
     setIsSubmitting(true);
     try {
-      addCustomer(cleanName, phone.trim(), group.trim() || 'Congregación');
-      toast.success(t('toast.customerAdded'));
-      setName('');
-      onClose();
+      const res = await addCustomer(cleanName, phone.trim(), group.trim() || 'Congregación');
+      if (res.success) {
+        toast.success(t('toast.customerAdded'));
+        setName('');
+        onClose();
+      } else {
+        toast.error(res.error || 'Error de red al guardar el cliente');
+      }
     } finally {
       setIsSubmitting(false);
     }

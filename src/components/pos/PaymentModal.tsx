@@ -8,6 +8,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { PaymentMethod, Sale } from '../../types';
 import { ChangeCalculator } from './ChangeCalculator';
+import { toCents, fromCents, roundMoney } from '../../utils/finance';
 import toast from 'react-hot-toast';
 import { CheckCircle, Share2, Banknote, CreditCard, BookOpen, Heart, Coffee } from 'lucide-react';
 
@@ -17,10 +18,12 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const isDark = theme === 'dark';
 
   const { currentUser } = useAuthStore();
-  const { cart, processSale, products } = usePOSStore();
+  const { cart, processSale, processDonationSale, isProcessingSale } = usePOSStore();
   const { customers, chargeSaleToTab, generateReceiptText, getWhatsAppShareUrl } = useTabStore();
 
-  const total = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+  const total = fromCents(
+    cart.reduce((acc, item) => acc + toCents(item.product.price) * item.quantity, 0)
+  );
 
   const [method, setMethod] = useState<PaymentMethod>('efectivo');
   const [tendered, setTendered] = useState<number>(total);
@@ -31,30 +34,35 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const [donatedChange, setDonatedChange] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  const wasOpenRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       setTendered(total);
-      if (!customerId && customers[0]?.id) {
-        setCustomerId(customers[0].id);
-      }
       setIsSubmitting(false);
     }
-  }, [isOpen, total, customers, customerId]);
+    wasOpenRef.current = isOpen;
+  }, [isOpen, total]);
 
+  React.useEffect(() => {
+    if (isOpen && !customerId && customers[0]?.id) {
+      setCustomerId(customers[0].id);
+    }
+  }, [isOpen, customers, customerId]);
+
+  const busy = isSubmitting || isProcessingSale;
   const customer = customers.find((c) => c.id === customerId);
 
   const availableCredit = customer
-    ? Number(
-        (
-          Math.max(0, Number(customer.balance || 0)) +
+    ? roundMoney(
+        Math.max(0, Number(customer.balance || 0)) +
           (Number(customer.debt || 0) < 0 ? Math.abs(Number(customer.debt || 0)) : 0)
-        ).toFixed(2)
       )
     : 0;
   const prepaidUsedForSale =
-    method === 'fiado' && customer ? Number(Math.min(availableCredit, total).toFixed(2)) : 0;
+    method === 'fiado' && customer ? roundMoney(Math.min(availableCredit, total)) : 0;
   const netTabDebtForSale =
-    method === 'fiado' ? Number(Math.max(0, total - prepaidUsedForSale).toFixed(2)) : undefined;
+    method === 'fiado' ? roundMoney(Math.max(0, total - prepaidUsedForSale)) : undefined;
 
   // Estilos de Color Semántico Sutil Quiet Luxury por Método de Pago (10%-15% opacidad, alto contraste)
   const getMethodSemanticClasses = (id: PaymentMethod, active: boolean) => {
@@ -111,19 +119,19 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
     }
   };
 
-  const handleConvertChangeToDonation = () => {
-    if (!currentUser || isSubmitting) return;
-    if (!Number.isFinite(tendered) || isNaN(tendered) || tendered <= total) {
+  const handleConvertChangeToDonation = async () => {
+    if (!currentUser || busy) return;
+    if (!Number.isFinite(tendered) || isNaN(tendered) || toCents(tendered) <= toCents(total)) {
       toast.error('El importe entregado debe ser mayor al total para donar el cambio');
       return;
     }
 
-    const change = Math.max(0, Number((tendered - total).toFixed(2)));
+    const change = fromCents(Math.max(0, toCents(tendered) - toCents(total)));
     if (change <= 0) return;
 
     setIsSubmitting(true);
     try {
-      const res = processSale({
+      const res = await processSale({
         paymentMethod: 'efectivo',
         amountTendered: total,
         changeGiven: 0,
@@ -135,44 +143,24 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
       });
 
       if (res.success && res.sale) {
-        const donativoProduct = products.find((p) => p.category === 'donativos');
-
-        const donationSale: Sale = {
-          id: `sale-${Date.now()}-donativo`,
-          timestamp: new Date().toISOString(),
-          items: [
-            {
-              product: donativoProduct
-                ? { ...donativoProduct, price: change }
-                : {
-                    id: 'prod-donativo-cambio',
-                    name: 'Donativo (Cambio de compra)',
-                    price: change,
-                    category: 'donativos',
-                    description: 'Cambio voluntario convertido en donativo para la obra',
-                  },
-              quantity: 1,
-            },
-          ],
-          total: change,
-          paymentMethod: 'donativo',
-          donationSubMethod: 'efectivo',
-          amountTendered: change,
-          changeGiven: 0,
+        const donationRes = await processDonationSale({
+          amount: change,
           sellerName: currentUser.name,
           sellerRole: currentUser.role,
-          notes: notes.trim()
-            ? `Donativo por cambio de compra: ${notes.trim()}`
-            : `Donativo por cambio de compra (Venta #${res.sale.id.slice(-6)})`,
-        };
+          notes: notes.trim() || undefined,
+          donationSubMethod: 'efectivo',
+          relatedSaleId: res.sale.id,
+        });
 
-        usePOSStore.setState((state) => ({
-          sales: [donationSale, ...state.sales],
-        }));
-
-        setDonatedChange(change);
         setSale(res.sale);
-        toast.success(t('payment.success'));
+        if (donationRes.success) {
+          setDonatedChange(change);
+          toast.success(t('payment.success'));
+        } else {
+          toast.error(
+            donationRes.error || 'Venta cobrada, pero hubo un error al guardar el donativo del cambio'
+          );
+        }
       } else {
         toast.error(res.error || 'Error al procesar venta');
       }
@@ -181,8 +169,8 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
     }
   };
 
-  const handleConfirm = () => {
-    if (!currentUser || isSubmitting) return;
+  const handleConfirm = async () => {
+    if (!currentUser || busy) return;
 
     if (!cart || cart.length === 0) {
       toast.error('El carrito está vacío');
@@ -191,6 +179,11 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
     if (!Number.isFinite(total) || isNaN(total) || total < 0) {
       toast.error('Importe total inválido en el carrito');
+      return;
+    }
+
+    if (method !== 'consumo_interno' && total <= 0) {
+      toast.error('El importe a cobrar debe ser mayor a 0.00€');
       return;
     }
 
@@ -217,9 +210,9 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
         toast.error('Introduce un monto de efectivo válido');
         return;
       }
-      if (Number(tendered.toFixed(2)) < Number(total.toFixed(2))) {
+      if (toCents(tendered) < toCents(total)) {
         toast.error(
-          `Efectivo insuficiente: faltan ${(total - tendered).toFixed(2)}€ para cubrir el total`
+          `Efectivo insuficiente: faltan ${fromCents(toCents(total) - toCents(tendered)).toFixed(2)}€ para cubrir el total`
         );
         return;
       }
@@ -232,9 +225,9 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
     setIsSubmitting(true);
     try {
-      const change = Math.max(0, Number((tendered - total).toFixed(2)));
+      const change = fromCents(Math.max(0, toCents(tendered) - toCents(total)));
 
-      const res = processSale({
+      const res = await processSale({
         paymentMethod: method,
         amountTendered: method === 'efectivo' ? tendered : total,
         changeGiven: method === 'efectivo' ? change : 0,
@@ -263,7 +256,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   };
 
   const handleClose = () => {
-    if (isSubmitting) return;
+    if (busy) return;
     setSale(null);
     setDonatedChange(null);
     setNotes('');
@@ -346,8 +339,9 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                   <button
                     key={m.id}
                     type="button"
+                    disabled={busy}
                     onClick={() => setMethod(m.id)}
-                    className={`min-h-[68px] p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer select-none ${getMethodSemanticClasses(
+                    className={`min-h-[68px] p-3 rounded-2xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer select-none disabled:opacity-50 ${getMethodSemanticClasses(
                       m.id,
                       active
                     )}`}
@@ -372,8 +366,9 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                 <button
                   key={m.id}
                   type="button"
+                  disabled={busy}
                   onClick={() => setMethod(m.id)}
-                  className={`min-h-[48px] px-3.5 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-sm transition cursor-pointer select-none ${getMethodSemanticClasses(
+                  className={`min-h-[48px] px-3.5 py-2.5 rounded-2xl border flex items-center justify-center gap-2 text-sm transition cursor-pointer select-none disabled:opacity-50 ${getMethodSemanticClasses(
                     m.id,
                     active
                   )}`}
@@ -388,17 +383,17 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
           {method === 'efectivo' && (
             <div className="space-y-2.5">
               <ChangeCalculator total={total} tendered={tendered} onTenderedChange={setTendered} />
-              {tendered > total && (
+              {toCents(tendered) > toCents(total) && (
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={isSubmitting}
-                  isLoading={isSubmitting}
+                  disabled={busy}
+                  isLoading={busy}
                   className="w-full"
                   onClick={handleConvertChangeToDonation}
                   icon={<Heart className="w-4 h-4" />}
                 >
-                  Convertir cambio ({(tendered - total).toFixed(2)} €) en Donativo
+                  Convertir cambio ({fromCents(toCents(tendered) - toCents(total)).toFixed(2)} €) en Donativo
                 </Button>
               )}
             </div>
@@ -504,8 +499,8 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
           <Button
             variant="primary"
             size="xl"
-            disabled={isSubmitting}
-            isLoading={isSubmitting}
+            disabled={busy}
+            isLoading={busy}
             className="w-full"
             onClick={handleConfirm}
           >

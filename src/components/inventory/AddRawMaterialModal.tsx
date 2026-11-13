@@ -5,6 +5,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { RawMaterial, Category, QuickColor } from '../../types';
 import { Palette, RotateCcw } from 'lucide-react';
+import { parseMoneyInput, roundMoney } from '../../utils/finance';
 import toast from 'react-hot-toast';
 
 interface AddRawMaterialModalProps {
@@ -45,6 +46,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
   const [minStock, setMinStock] = useState<number>(10);
   const [costPerUnit, setCostPerUnit] = useState<number>(0.1);
   const [price, setPrice] = useState<number>(1.5);
+  const [stockDraft, setStockDraft] = useState<string>('50');
+  const [minStockDraft, setMinStockDraft] = useState<string>('10');
+  const [costDraft, setCostDraft] = useState<string>('0.1');
+  const [priceDraft, setPriceDraft] = useState<string>('1.5');
   const [category, setCategory] = useState<Category>('Cafés');
   const [isSellable, setIsSellable] = useState<boolean>(true);
   const [isQuickAccess, setIsQuickAccess] = useState<boolean>(false);
@@ -54,17 +59,22 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
   useEffect(() => {
     setIsSubmitting(false);
     if (initialMaterial) {
+      const initCost = initialMaterial.costPerUnit || 0;
+      const initPrice =
+        initialMaterial.price ??
+        (initialMaterial.costPerUnit > 0
+          ? Number((initialMaterial.costPerUnit * 2).toFixed(2))
+          : 1.5);
       setName(initialMaterial.name);
       setUnit(initialMaterial.unit || 'unidades');
       setCurrentStock(initialMaterial.currentStock);
       setMinStock(initialMaterial.minStock);
-      setCostPerUnit(initialMaterial.costPerUnit || 0);
-      setPrice(
-        initialMaterial.price ??
-          (initialMaterial.costPerUnit > 0
-            ? Number((initialMaterial.costPerUnit * 2).toFixed(2))
-            : 1.5)
-      );
+      setCostPerUnit(initCost);
+      setPrice(initPrice);
+      setStockDraft(String(initialMaterial.currentStock));
+      setMinStockDraft(String(initialMaterial.minStock));
+      setCostDraft(String(initCost));
+      setPriceDraft(String(initPrice));
       setCategory(initialMaterial.category || 'cafeteria');
       setIsSellable(initialMaterial.isSellable !== false);
       setIsQuickAccess(Boolean(initialMaterial.isQuickAccess));
@@ -82,6 +92,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
       setMinStock(10);
       setCostPerUnit(0.1);
       setPrice(1.5);
+      setStockDraft('50');
+      setMinStockDraft('10');
+      setCostDraft('0.1');
+      setPriceDraft('1.5');
       setCategory('Cafés');
       setIsSellable(true);
       setIsQuickAccess(false);
@@ -89,7 +103,7 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
     }
   }, [initialMaterial, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
 
@@ -99,16 +113,21 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
       return;
     }
 
+    const finalStock = parseMoneyInput(stockDraft) ?? currentStock;
+    const finalMinStock = parseMoneyInput(minStockDraft) ?? minStock;
+    const finalCost = parseMoneyInput(costDraft) ?? costPerUnit;
+    const finalPrice = parseMoneyInput(priceDraft) ?? price;
+
     if (
-      !Number.isFinite(currentStock) ||
-      isNaN(currentStock) ||
-      currentStock < 0 ||
-      !Number.isFinite(minStock) ||
-      isNaN(minStock) ||
-      minStock < 0 ||
-      !Number.isFinite(costPerUnit) ||
-      isNaN(costPerUnit) ||
-      costPerUnit < 0
+      !Number.isFinite(finalStock) ||
+      isNaN(finalStock) ||
+      finalStock < 0 ||
+      !Number.isFinite(finalMinStock) ||
+      isNaN(finalMinStock) ||
+      finalMinStock < 0 ||
+      !Number.isFinite(finalCost) ||
+      isNaN(finalCost) ||
+      finalCost < 0
     ) {
       toast.error(
         'El stock, alerta mínima y coste unitario deben ser números válidos mayores o iguales a 0'
@@ -116,7 +135,7 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
       return;
     }
 
-    if (isSellable && (!Number.isFinite(price) || isNaN(price) || price <= 0)) {
+    if (isSellable && (!Number.isFinite(finalPrice) || isNaN(finalPrice) || finalPrice <= 0)) {
       toast.error('El precio de venta para productos visibles en POS debe ser mayor a 0.00€');
       return;
     }
@@ -126,28 +145,32 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
     setIsSubmitting(true);
     try {
       if (initialMaterial) {
-        updateRawMaterial(initialMaterial.id, {
+        const res = await updateRawMaterial(initialMaterial.id, {
           name: cleanName,
           unit,
-          currentStock: Math.max(0, Number(currentStock)),
-          minStock: Math.max(0, Number(minStock)),
-          costPerUnit: Math.max(0, Number(costPerUnit)),
-          price: isSellable ? Math.max(0.01, Number(price)) : undefined,
+          currentStock: Math.max(0, Number(finalStock)),
+          minStock: Math.max(0, Number(finalMinStock)),
+          costPerUnit: Math.max(0, roundMoney(finalCost)),
+          price: isSellable ? Math.max(0.01, roundMoney(finalPrice)) : undefined,
           category,
           isSellable,
           isQuickAccess,
           quickColor: finalQuickColor,
           quick_color: finalQuickColor,
         });
+        if (!res.success) {
+          toast.error(res.error || 'Error de red al actualizar el producto en Supabase');
+          return;
+        }
         toast.success(`Producto "${cleanName}" actualizado correctamente`);
       } else {
-        addRawMaterial({
+        const res = await addRawMaterial({
           name: cleanName,
           unit,
-          currentStock: Math.max(0, Number(currentStock)),
-          minStock: Math.max(0, Number(minStock)),
-          costPerUnit: Math.max(0, Number(costPerUnit)),
-          price: isSellable ? Math.max(0.01, Number(price)) : undefined,
+          currentStock: Math.max(0, Number(finalStock)),
+          minStock: Math.max(0, Number(finalMinStock)),
+          costPerUnit: Math.max(0, roundMoney(finalCost)),
+          price: isSellable ? Math.max(0.01, roundMoney(finalPrice)) : undefined,
           category,
           isSellable,
           isQuickAccess,
@@ -155,6 +178,10 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
           quick_color: finalQuickColor,
           isOutOfStock: false,
         });
+        if (!res.success) {
+          toast.error(res.error || 'Error de red al crear el producto en Supabase');
+          return;
+        }
         toast.success(`Insumo "${cleanName}" añadido correctamente`);
       }
 
@@ -239,14 +266,26 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
           <div>
             <label className={labelClasses}>Coste Unitario (€)</label>
             <input
-              type="number"
-              step="any"
-              min="0"
-              value={Number.isFinite(costPerUnit) ? costPerUnit : ''}
+              type="text"
+              inputMode="decimal"
+              value={costDraft}
               onFocus={(e) => e.target.select()}
               onChange={(e) => {
-                const parsed = parseFloat(e.target.value);
-                setCostPerUnit(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+                const raw = e.target.value;
+                if (raw === '') {
+                  setCostDraft('');
+                  setCostPerUnit(0);
+                  return;
+                }
+                if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+                setCostDraft(raw);
+                const parsed = parseMoneyInput(raw);
+                if (parsed !== null) setCostPerUnit(parsed);
+              }}
+              onBlur={() => {
+                const safeVal = parseMoneyInput(costDraft) ?? 0;
+                setCostDraft(String(safeVal));
+                setCostPerUnit(safeVal);
               }}
               className={`${inputClasses} tabular-nums`}
             />
@@ -257,15 +296,27 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
               Precio de Venta (€) {isSellable ? '*' : '(Opcional)'}
             </label>
             <input
-              type="number"
-              step="any"
-              min="0"
+              type="text"
+              inputMode="decimal"
               disabled={!isSellable}
-              value={Number.isFinite(price) ? price : ''}
+              value={priceDraft}
               onFocus={(e) => e.target.select()}
               onChange={(e) => {
-                const parsed = parseFloat(e.target.value);
-                setPrice(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+                const raw = e.target.value;
+                if (raw === '') {
+                  setPriceDraft('');
+                  setPrice(0);
+                  return;
+                }
+                if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+                setPriceDraft(raw);
+                const parsed = parseMoneyInput(raw);
+                if (parsed !== null) setPrice(parsed);
+              }}
+              onBlur={() => {
+                const safeVal = parseMoneyInput(priceDraft) ?? 0;
+                setPriceDraft(String(safeVal));
+                setPrice(safeVal);
               }}
               className={`${inputClasses} font-bold tabular-nums disabled:opacity-40`}
             />
@@ -276,14 +327,26 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
           <div>
             <label className={labelClasses}>Stock Inicial</label>
             <input
-              type="number"
-              step="any"
-              min="0"
-              value={Number.isFinite(currentStock) ? currentStock : ''}
+              type="text"
+              inputMode="decimal"
+              value={stockDraft}
               onFocus={(e) => e.target.select()}
               onChange={(e) => {
-                const parsed = parseFloat(e.target.value);
-                setCurrentStock(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+                const raw = e.target.value;
+                if (raw === '') {
+                  setStockDraft('');
+                  setCurrentStock(0);
+                  return;
+                }
+                if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+                setStockDraft(raw);
+                const parsed = parseMoneyInput(raw);
+                if (parsed !== null) setCurrentStock(parsed);
+              }}
+              onBlur={() => {
+                const safeVal = parseMoneyInput(stockDraft) ?? 0;
+                setStockDraft(String(safeVal));
+                setCurrentStock(safeVal);
               }}
               className={`${inputClasses} tabular-nums`}
             />
@@ -292,14 +355,26 @@ export const AddRawMaterialModal: React.FC<AddRawMaterialModalProps> = ({
           <div>
             <label className={labelClasses}>Alerta Stock Mínimo</label>
             <input
-              type="number"
-              step="any"
-              min="0"
-              value={Number.isFinite(minStock) ? minStock : ''}
+              type="text"
+              inputMode="decimal"
+              value={minStockDraft}
               onFocus={(e) => e.target.select()}
               onChange={(e) => {
-                const parsed = parseFloat(e.target.value);
-                setMinStock(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+                const raw = e.target.value;
+                if (raw === '') {
+                  setMinStockDraft('');
+                  setMinStock(0);
+                  return;
+                }
+                if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+                setMinStockDraft(raw);
+                const parsed = parseMoneyInput(raw);
+                if (parsed !== null) setMinStock(parsed);
+              }}
+              onBlur={() => {
+                const safeVal = parseMoneyInput(minStockDraft) ?? 0;
+                setMinStockDraft(String(safeVal));
+                setMinStock(safeVal);
               }}
               className={`${inputClasses} tabular-nums`}
             />

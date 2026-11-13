@@ -589,12 +589,12 @@ export async function insertSale(sale: Record<string, any> | Record<string, any>
 
     if (error) {
       console.warn('[Supabase] insertSale warning:', error);
-      return null;
+      throw error;
     }
     return (data || []).map(fromSaleSnake);
   } catch (err) {
     console.warn('[Supabase] insertSale catch:', err);
-    return null;
+    throw err;
   }
 }
 
@@ -606,7 +606,7 @@ export const insertSales = insertSale;
 export async function deleteSale(saleId: string): Promise<boolean> {
   try {
     const validId = cleanUUID(saleId);
-    if (!validId) return false;
+    if (!validId) return true;
 
     const { error } = await supabase
       .from('sales')
@@ -615,12 +615,12 @@ export async function deleteSale(saleId: string): Promise<boolean> {
 
     if (error) {
       console.warn('[Supabase] deleteSale warning:', error);
-      return false;
+      throw error;
     }
     return true;
   } catch (err) {
     console.warn('[Supabase] deleteSale catch:', err);
-    return false;
+    throw err;
   }
 }
 
@@ -657,12 +657,12 @@ export async function insertTab(tab: Record<string, any> | Record<string, any>[]
 
     if (error) {
       console.warn('[Supabase] insertTab warning:', error);
-      return null;
+      throw error;
     }
     return (data || []).map(fromTabSnake);
   } catch (err) {
     console.warn('[Supabase] insertTab catch:', err);
-    return null;
+    throw err;
   }
 }
 
@@ -686,12 +686,12 @@ export async function updateTabBalances(tabId: string, debtAmount: number, prepa
 
     if (error) {
       console.warn('[Supabase] updateTabBalances warning:', error);
-      return false;
+      throw error;
     }
     return true;
   } catch (err) {
     console.warn('[Supabase] updateTabBalances catch:', err);
-    return false;
+    throw err;
   }
 }
 
@@ -728,12 +728,12 @@ export async function insertTabPayment(payment: Record<string, any> | Record<str
 
     if (error) {
       console.warn('[Supabase] insertTabPayment warning:', error);
-      return null;
+      throw error;
     }
     return (data || []).map(fromTabPaymentSnake);
   } catch (err) {
     console.warn('[Supabase] insertTabPayment catch:', err);
-    return null;
+    throw err;
   }
 }
 
@@ -791,12 +791,12 @@ export async function insertCloseout(closeout: Record<string, any> | Record<stri
 
     if (error) {
       console.warn('[Supabase] insertCloseout warning:', error);
-      return null;
+      throw error;
     }
     return (data || []).map(fromCloseoutSnake);
   } catch (err) {
     console.warn('[Supabase] insertCloseout catch:', err);
-    return null;
+    throw err;
   }
 }
 

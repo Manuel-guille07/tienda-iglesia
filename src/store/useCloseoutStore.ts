@@ -74,12 +74,15 @@ interface CloseoutState {
   tabCredits: TabCreditRecord[];
   lastCloseTimestamp: string | null;
   isSyncingSheets: boolean;
+  isClosingShift: boolean;
 
   loadCloseouts: () => Promise<void>;
   addIncident: (text: string, category: Incident['category'], author: string, role: Role) => Incident;
   addVoidAudit: (record: Omit<VoidAuditRecord, 'id'>) => VoidAuditRecord;
   addTabCredit: (record: Omit<TabCreditRecord, 'id'>) => void;
-  recordShiftClose: (closeData: Omit<ShiftClose, 'id' | 'timestamp' | 'exportStatus'>) => ShiftClose;
+  recordShiftClose: (
+    closeData: Omit<ShiftClose, 'id' | 'timestamp' | 'exportStatus'>
+  ) => Promise<{ success: boolean; closeout?: ShiftClose; error?: string }>;
   handleRealtimeCloseout: (payload: any) => void;
   exportToGoogleSheets: (shiftCloseId: string) => Promise<{ success: boolean; message: string }>;
   downloadCSV: (shiftClose: ShiftClose, sales: Sale[], tabPayments?: TabPaymentExport[]) => void;
@@ -92,6 +95,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
   tabCredits: [],
   lastCloseTimestamp: null,
   isSyncingSheets: false,
+  isClosingShift: false,
 
   loadCloseouts: async () => {
     try {
@@ -284,59 +288,76 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
     }));
   },
 
-  recordShiftClose: (closeData) => {
-    const timestamp = new Date().toISOString();
-    const tempId = `close-${Date.now()}`;
-    const newClose: ShiftClose = {
-      ...closeData,
-      id: tempId,
-      timestamp,
-      exportStatus: 'pending',
-    };
+  recordShiftClose: async (closeData) => {
+    if (get().isClosingShift) {
+      return { success: false, error: 'Cierre de caja en curso, por favor espera...' };
+    }
 
-    set({
-      shiftCloses: [newClose, ...get().shiftCloses],
-      lastCloseTimestamp: timestamp,
-    });
+    if (
+      !Number.isFinite(closeData.actualCash) ||
+      isNaN(closeData.actualCash) ||
+      closeData.actualCash < 0
+    ) {
+      return { success: false, error: 'El efectivo contado debe ser un número válido >= 0' };
+    }
 
-    insertCloseout({
-      closed_by_user: closeData.closedBy,
-      closed_by_role: closeData.role,
-      expected_cash: closeData.expectedCash,
-      counted_cash: closeData.actualCash,
-      card_total: closeData.totalCard,
-      tabs_cash: closeData.tabPaymentsCash ?? 0,
-      tabs_card: closeData.tabPaymentsCard ?? 0,
-      discrepancy: closeData.difference,
-    })
-      .then((savedRows) => {
-        if (savedRows && savedRows[0]) {
-          const saved = savedRows[0];
-          const serverTs = saved.timestamp || timestamp;
-          const effectiveTs =
-            new Date(serverTs).getTime() > new Date(timestamp).getTime() ? serverTs : timestamp;
-
-          set((state) => ({
-            shiftCloses: state.shiftCloses.map((c) =>
-              c.id === tempId
-                ? {
-                    ...c,
-                    id: String(saved.id),
-                    timestamp: effectiveTs,
-                    exportStatus: 'synced',
-                  }
-                : c
-            ),
-            lastCloseTimestamp: effectiveTs,
-          }));
-        }
-      })
-      .catch((error) => {
-        console.error('Error al registrar cierre de caja en Supabase:', error);
-        toast.error('Error al sincronizar el cierre de caja con Supabase');
+    set({ isClosingShift: true });
+    try {
+      const savedRows = await insertCloseout({
+        closed_by_user: closeData.closedBy,
+        closed_by_role: closeData.role,
+        expected_cash: closeData.expectedCash,
+        counted_cash: closeData.actualCash,
+        card_total: closeData.totalCard,
+        tabs_cash: closeData.tabPaymentsCash ?? 0,
+        tabs_card: closeData.tabPaymentsCard ?? 0,
+        discrepancy: closeData.difference,
       });
 
-    return newClose;
+      const saved = savedRows?.[0];
+      if (!saved) {
+        return {
+          success: false,
+          error: 'No se recibió confirmación del servidor al registrar el cierre de caja',
+        };
+      }
+
+      const finalId = String(saved.id);
+      const effectiveTs = saved.timestamp || new Date().toISOString();
+
+      const confirmedClose: ShiftClose = {
+        ...closeData,
+        id: finalId,
+        timestamp: effectiveTs,
+        exportStatus: 'synced',
+      };
+
+      set((state) => {
+        const existingWithoutDup = state.shiftCloses.filter((c) => c.id !== finalId);
+        const currentLastMs = state.lastCloseTimestamp
+          ? new Date(state.lastCloseTimestamp).getTime()
+          : 0;
+        const nextTsMs = new Date(effectiveTs).getTime();
+        const nextLastTs = nextTsMs >= currentLastMs ? effectiveTs : state.lastCloseTimestamp;
+
+        return {
+          shiftCloses: [confirmedClose, ...existingWithoutDup],
+          lastCloseTimestamp: nextLastTs,
+        };
+      });
+
+      return { success: true, closeout: confirmedClose };
+    } catch (error: any) {
+      console.error('Error al registrar cierre de caja en Supabase:', error);
+      return {
+        success: false,
+        error:
+          error?.message ||
+          'Error de red: No se pudo registrar el cierre de caja. El turno permanece abierto sin pérdida de datos.',
+      };
+    } finally {
+      set({ isClosingShift: false });
+    }
   },
 
   handleRealtimeCloseout: (payload: any) => {

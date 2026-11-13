@@ -8,6 +8,7 @@ import { Modal } from '../ui/Modal';
 import { AddRawMaterialModal } from './AddRawMaterialModal';
 import { RecipeEditorModal } from './RecipeEditorModal';
 import { Product, RawMaterial } from '../../types';
+import { parseMoneyInput } from '../../utils/finance';
 import toast from 'react-hot-toast';
 
 export const InventoryScreen: React.FC = () => {
@@ -27,6 +28,7 @@ export const InventoryScreen: React.FC = () => {
   const [tab, setTab] = useState<'raw' | 'recipes'>('raw');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number>(10);
+  const [amountDraft, setAmountDraft] = useState<string>('10');
   const [isAddMaterialOpen, setIsAddMaterialOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
@@ -38,18 +40,23 @@ export const InventoryScreen: React.FC = () => {
 
   const mat = rawMaterials.find((m) => m.id === selectedId);
 
-  const handleRestock = () => {
+  const handleRestock = async () => {
     if (isSubmitting) return;
     if (!selectedId) return;
-    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+    const effectiveAmount = parseMoneyInput(amountDraft) ?? amount;
+    if (!Number.isFinite(effectiveAmount) || isNaN(effectiveAmount) || effectiveAmount <= 0) {
       toast.error('La cantidad a reponer debe ser un número válido mayor a 0');
       return;
     }
     setIsSubmitting(true);
     try {
-      restockRawMaterial(selectedId, amount);
-      toast.success(t('toast.stockUpdated'));
-      setSelectedId(null);
+      const ok = await restockRawMaterial(selectedId, effectiveAmount);
+      if (ok) {
+        toast.success(t('toast.stockUpdated'));
+        setSelectedId(null);
+      } else {
+        toast.error('Error de red al guardar la reposición en Supabase');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -314,8 +321,10 @@ export const InventoryScreen: React.FC = () => {
                       className="w-full font-semibold text-xs"
                       icon={<Plus className="w-3.5 h-3.5" />}
                       onClick={() => {
+                        const defaultRestock = m.unit === 'ml' ? 1000 : 20;
                         setSelectedId(m.id);
-                        setAmount(m.unit === 'ml' ? 1000 : 20);
+                        setAmount(defaultRestock);
+                        setAmountDraft(String(defaultRestock));
                       }}
                     >
                       {t('inventory.addStock')}
@@ -447,14 +456,26 @@ export const InventoryScreen: React.FC = () => {
       >
         <div className="space-y-3">
           <input
-            type="number"
-            step="any"
-            min="0"
-            value={Number.isFinite(amount) ? amount : ''}
+            type="text"
+            inputMode="decimal"
+            value={amountDraft}
             onFocus={(e) => e.target.select()}
             onChange={(e) => {
-              const parsed = parseFloat(e.target.value);
-              setAmount(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
+              const raw = e.target.value;
+              if (raw === '') {
+                setAmountDraft('');
+                setAmount(0);
+                return;
+              }
+              if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+              setAmountDraft(raw);
+              const parsed = parseMoneyInput(raw);
+              if (parsed !== null) setAmount(parsed);
+            }}
+            onBlur={() => {
+              const safeVal = parseMoneyInput(amountDraft) ?? 0;
+              setAmountDraft(String(safeVal));
+              setAmount(safeVal);
             }}
             className={`w-full border rounded-2xl p-3 text-lg font-bold focus:outline-none tabular-nums ${
               isDark

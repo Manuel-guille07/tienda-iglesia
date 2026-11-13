@@ -1,15 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
 import { useTheme } from '../../context/ThemeContext';
+import { parseMoneyInput, toCents } from '../../utils/finance';
 
 interface CashArqueoPanelProps {
   expectedCash: number;
   salesCash?: number;
   tabPaymentsCash?: number;
+  donativosCash?: number;
   counted: number;
   onCountedChange: (val: number) => void;
   difference: number;
-  onConfirmClose: () => void;
+  onConfirmClose: () => void | Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -17,6 +19,7 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
   expectedCash,
   salesCash = 0,
   tabPaymentsCash = 0,
+  donativosCash = 0,
   counted,
   onCountedChange,
   difference,
@@ -25,6 +28,19 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
 }) => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  const [draft, setDraft] = useState<string>(Number.isFinite(counted) ? String(counted) : '');
+
+  useEffect(() => {
+    const parsedDraft = parseMoneyInput(draft);
+    if (!Number.isFinite(counted)) {
+      setDraft('');
+    } else if (parsedDraft === null || toCents(parsedDraft) !== toCents(counted)) {
+      if (!(draft === '' && toCents(counted) === 0)) {
+        setDraft(String(counted));
+      }
+    }
+  }, [counted]);
 
   return (
     <div
@@ -46,7 +62,7 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
           <strong className="text-lg font-bold tabular-nums">{expectedCash.toFixed(2)} €</strong>
         </div>
 
-        {tabPaymentsCash > 0 && (
+        {(tabPaymentsCash > 0 || donativosCash > 0) && (
           <div
             className={`pt-2 border-t text-xs space-y-1 ${
               isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#6E665E]'
@@ -56,10 +72,18 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
               <span>• Ventas en mostrador:</span>
               <span className="font-medium tabular-nums">{salesCash.toFixed(2)} €</span>
             </div>
-            <div className="flex justify-between">
-              <span>• Abonos de fiados recibidos:</span>
-              <span className="font-medium tabular-nums">+{tabPaymentsCash.toFixed(2)} €</span>
-            </div>
+            {tabPaymentsCash > 0 && (
+              <div className="flex justify-between">
+                <span>• Abonos de fiados recibidos:</span>
+                <span className="font-medium tabular-nums">+{tabPaymentsCash.toFixed(2)} €</span>
+              </div>
+            )}
+            {donativosCash > 0 && (
+              <div className="flex justify-between">
+                <span>• Donativos en efectivo:</span>
+                <span className="font-medium tabular-nums">+{donativosCash.toFixed(2)} €</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -73,15 +97,29 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
           Efectivo físico contado en gaveta (€):
         </label>
         <input
-          type="number"
-          step="any"
-          min="0"
-          value={Number.isFinite(counted) ? counted : ''}
+          type="text"
+          inputMode="decimal"
+          value={draft}
           placeholder="0.00"
           onFocus={(e) => e.target.select()}
           onChange={(e) => {
-            const parsed = parseFloat(e.target.value);
-            const safeVal = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
+            const raw = e.target.value;
+            if (raw === '') {
+              setDraft('');
+              onCountedChange(0);
+              return;
+            }
+            if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+            setDraft(raw);
+            const parsed = parseMoneyInput(raw);
+            if (parsed !== null) {
+              onCountedChange(parsed);
+            }
+          }}
+          onBlur={() => {
+            const parsed = parseMoneyInput(draft);
+            const safeVal = parsed ?? 0;
+            setDraft(String(safeVal));
             onCountedChange(safeVal);
           }}
           className={`w-full min-h-[52px] rounded-2xl p-3.5 text-2xl font-bold tabular-nums border focus:outline-none ${

@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ShiftClose } from '../../types';
+import { fromCents, toCents } from '../../utils/finance';
 import {
   Calculator,
   FileSpreadsheet,
@@ -49,6 +50,7 @@ export const CloseoutScreen: React.FC = () => {
     exportToGoogleSheets,
     downloadCSV,
     isSyncingSheets,
+    isClosingShift: isStoreClosingShift,
   } = useCloseoutStore();
 
   const [counted, setCounted] = useState<number>(0);
@@ -56,6 +58,7 @@ export const CloseoutScreen: React.FC = () => {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [selectedHistoricalIndex, setSelectedHistoricalIndex] = useState<number | null>(null);
   const [isClosingShift, setIsClosingShift] = useState(false);
+  const closingLock = isClosingShift || isStoreClosingShift;
 
   const allTabPayments = customers.flatMap((c) =>
     (c.movements || [])
@@ -107,29 +110,42 @@ export const CloseoutScreen: React.FC = () => {
     }, new Map<string, { count: number; total: number }>())
   );
 
-  const salesCash = Number(
-    shiftSales.filter((s) => s.paymentMethod === 'efectivo').reduce((a, s) => a + s.total, 0).toFixed(2)
+  const salesCash = fromCents(
+    shiftSales.filter((s) => s.paymentMethod === 'efectivo').reduce((a, s) => a + toCents(s.total), 0)
   );
-  const salesCard = Number(
-    shiftSales.filter((s) => s.paymentMethod === 'datafono').reduce((a, s) => a + s.total, 0).toFixed(2)
+  const salesCard = fromCents(
+    shiftSales.filter((s) => s.paymentMethod === 'datafono').reduce((a, s) => a + toCents(s.total), 0)
   );
 
-  const tabPaymentsCash = Number(
+  const donativosCash = fromCents(
+    shiftSales
+      .filter((s) => s.paymentMethod === 'donativo' && s.donationSubMethod !== 'datafono')
+      .reduce((a, s) => a + toCents(s.total), 0)
+  );
+  const donativosCard = fromCents(
+    shiftSales
+      .filter((s) => s.paymentMethod === 'donativo' && s.donationSubMethod === 'datafono')
+      .reduce((a, s) => a + toCents(s.total), 0)
+  );
+
+  const tabPaymentsCash = fromCents(
     shiftTabPayments
       .filter((p) => p.paymentMethod === 'efectivo')
-      .reduce((sum, p) => sum + p.amount, 0)
-      .toFixed(2)
+      .reduce((sum, p) => sum + toCents(p.amount), 0)
   );
 
-  const tabPaymentsCard = Number(
+  const tabPaymentsCard = fromCents(
     shiftTabPayments
       .filter((p) => p.paymentMethod === 'datafono')
-      .reduce((sum, p) => sum + p.amount, 0)
-      .toFixed(2)
+      .reduce((sum, p) => sum + toCents(p.amount), 0)
   );
 
-  const expectedCash = Number((salesCash + tabPaymentsCash).toFixed(2));
-  const totalCard = Number((salesCard + tabPaymentsCard).toFixed(2));
+  const expectedCash = fromCents(
+    toCents(salesCash) + toCents(tabPaymentsCash) + toCents(donativosCash)
+  );
+  const totalCard = fromCents(
+    toCents(salesCard) + toCents(tabPaymentsCard) + toCents(donativosCard)
+  );
   const {
     netFiados: totalFiados,
     grossFiados: totalFiadosGross,
@@ -138,11 +154,11 @@ export const CloseoutScreen: React.FC = () => {
     () => calculateShiftTabBreakdown(shiftSales, tabCredits),
     [shiftSales, tabCredits]
   );
-  const totalDonativos = Number(
-    shiftSales.filter((s) => s.paymentMethod === 'donativo').reduce((a, s) => a + s.total, 0).toFixed(2)
-  );
-  const totalConsumo = Number(
-    shiftSales.filter((s) => s.paymentMethod === 'consumo_interno').reduce((a, s) => a + s.total, 0).toFixed(2)
+  const totalDonativos = fromCents(toCents(donativosCash) + toCents(donativosCard));
+  const totalConsumo = fromCents(
+    shiftSales
+      .filter((s) => s.paymentMethod === 'consumo_interno')
+      .reduce((a, s) => a + toCents(s.total), 0)
   );
 
   const { totalCafes, totalRestoCafeteria, totalCoffeesQty, soldItemsSummary } = useMemo(
@@ -151,7 +167,7 @@ export const CloseoutScreen: React.FC = () => {
   );
 
   const totalCoffees = totalCoffeesQty;
-  const difference = Number((counted - expectedCash).toFixed(2));
+  const difference = fromCents(toCents(counted) - toCents(expectedCash));
 
   const getShift = () => ({
     closedBy: currentUser?.name || 'Turno',
@@ -166,7 +182,7 @@ export const CloseoutScreen: React.FC = () => {
     totalConsumoInterno: totalConsumo,
     totalCoffeesSold: totalCoffees,
     totalSalesCount: shiftSales.length,
-    totalRevenue: Number((expectedCash + totalCard + totalDonativos).toFixed(2)),
+    totalRevenue: fromCents(toCents(expectedCash) + toCents(totalCard)),
     difference,
     incidents,
     salesCash,
@@ -237,8 +253,13 @@ export const CloseoutScreen: React.FC = () => {
             size="sm"
             icon={<Download className="w-4 h-4" />}
             onClick={() => {
-              const s = recordShiftClose(getShift());
-              downloadCSV(s, shiftSales, shiftTabPayments);
+              const draftShift: ShiftClose = {
+                ...getShift(),
+                id: `draft-${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                exportStatus: 'pending',
+              };
+              downloadCSV(draftShift, shiftSales, shiftTabPayments);
               toast.success(t('export.csvSuccess'));
             }}
           >
@@ -259,11 +280,13 @@ export const CloseoutScreen: React.FC = () => {
           <Button
             variant="secondary"
             size="sm"
+            disabled={isSyncingSheets || closingLock}
             isLoading={isSyncingSheets}
             icon={<FileSpreadsheet className="w-4 h-4" />}
             onClick={async () => {
-              const s = recordShiftClose(getShift());
-              const res = await exportToGoogleSheets(s.id);
+              if (isSyncingSheets) return;
+              const targetId = shiftCloses[0]?.id || 'draft';
+              const res = await exportToGoogleSheets(targetId);
               toast.success(res.message);
             }}
           >
@@ -315,9 +338,11 @@ export const CloseoutScreen: React.FC = () => {
           <span className="text-2xl font-bold tabular-nums block mt-1.5">
             {expectedCash.toFixed(2)} €
           </span>
-          {tabPaymentsCash > 0 && (
+          {(tabPaymentsCash > 0 || donativosCash > 0) && (
             <span className={`text-xs block mt-1 truncate ${isDark ? 'text-emerald-200/80' : 'text-emerald-900'}`}>
-              Vtas: {salesCash.toFixed(2)} € · Abonos: +{tabPaymentsCash.toFixed(2)} €
+              Vtas: {salesCash.toFixed(2)} €
+              {tabPaymentsCash > 0 ? ` · Abonos: +${tabPaymentsCash.toFixed(2)} €` : ''}
+              {donativosCash > 0 ? ` · Don.: +${donativosCash.toFixed(2)} €` : ''}
             </span>
           )}
         </div>
@@ -512,22 +537,27 @@ export const CloseoutScreen: React.FC = () => {
           expectedCash={expectedCash}
           salesCash={salesCash}
           tabPaymentsCash={tabPaymentsCash}
+          donativosCash={donativosCash}
           counted={counted}
           onCountedChange={setCounted}
           difference={difference}
-          isSubmitting={isClosingShift}
-          onConfirmClose={() => {
-            if (isClosingShift) return;
+          isSubmitting={closingLock}
+          onConfirmClose={async () => {
+            if (closingLock) return;
             if (!Number.isFinite(counted) || isNaN(counted) || counted < 0) {
               toast.error('Introduce un monto de efectivo contado válido mayor o igual a 0');
               return;
             }
             setIsClosingShift(true);
             try {
-              recordShiftClose(getShift());
-              setCounted(0);
-              usePOSStore.setState({ cart: [] });
-              toast.success('Cierre de caja completado. Estado de caja reiniciado a 0.00€');
+              const res = await recordShiftClose(getShift());
+              if (res.success) {
+                setCounted(0);
+                usePOSStore.setState({ cart: [] });
+                toast.success('Cierre de caja completado. Estado de caja reiniciado a 0.00€');
+              } else {
+                toast.error(res.error || 'Error de red al confirmar el cierre de caja');
+              }
             } finally {
               setIsClosingShift(false);
             }

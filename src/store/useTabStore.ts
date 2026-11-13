@@ -1,40 +1,75 @@
 import { create } from 'zustand';
 import { CustomerTab, Sale, TabMovement } from '../types';
 import { getTabs, insertTab, insertTabPayment, updateTabBalances } from '../services/db';
+import { roundMoney, toCents, isValidPositiveMoney } from '../utils/finance';
+
+export interface TabMutationResult {
+  success: boolean;
+  customer?: CustomerTab;
+  error?: string;
+}
 
 interface TabState {
   customers: CustomerTab[];
   searchQuery: string;
   selectedCustomerId: string | null;
+  isMutatingTab: boolean;
 
   loadTabs: () => Promise<void>;
   setSearchQuery: (query: string) => void;
   setSelectedCustomerId: (id: string | null) => void;
 
-  addCustomer: (name: string, phone: string, churchGroup?: string) => CustomerTab;
+  addCustomer: (name: string, phone: string, churchGroup?: string) => Promise<TabMutationResult>;
   addTab: (
     nameOrData: string | { name: string; phone?: string; churchGroup?: string; balance?: number; debt?: number },
     phone?: string,
     churchGroup?: string
-  ) => CustomerTab;
-  addPrepaidBalance: (customerId: string, amount: number, description?: string, paymentMethod?: 'efectivo' | 'datafono') => void;
-  payDebt: (customerId: string, amount: number, description?: string, paymentMethod?: 'efectivo' | 'datafono') => void;
+  ) => Promise<TabMutationResult>;
+  addPrepaidBalance: (
+    customerId: string,
+    amount: number,
+    description?: string,
+    paymentMethod?: 'efectivo' | 'datafono'
+  ) => Promise<TabMutationResult>;
+  payDebt: (
+    customerId: string,
+    amount: number,
+    description?: string,
+    paymentMethod?: 'efectivo' | 'datafono'
+  ) => Promise<TabMutationResult>;
   payTab: (
-    customerIdOrData: string | { customerId?: string; tabId?: string; amount: number; description?: string; paymentMethod?: 'efectivo' | 'datafono' },
+    customerIdOrData:
+      | string
+      | {
+          customerId?: string;
+          tabId?: string;
+          amount: number;
+          description?: string;
+          paymentMethod?: 'efectivo' | 'datafono';
+        },
     amount?: number,
     description?: string,
     paymentMethod?: 'efectivo' | 'datafono'
-  ) => void;
+  ) => Promise<TabMutationResult>;
   addPayment: (
-    customerIdOrData: string | { customerId?: string; tabId?: string; amount: number; description?: string; paymentMethod?: 'efectivo' | 'datafono' },
+    customerIdOrData:
+      | string
+      | {
+          customerId?: string;
+          tabId?: string;
+          amount: number;
+          description?: string;
+          paymentMethod?: 'efectivo' | 'datafono';
+        },
     amount?: number,
     description?: string,
     paymentMethod?: 'efectivo' | 'datafono'
-  ) => void;
+  ) => Promise<TabMutationResult>;
   chargeSaleToTab: (
     customerId: string,
     sale: Sale
   ) => { newBalance: number; newDebt: number; prepaidUsed: number; netTabDebt: number };
+  revertSaleFromTab: (sale: Sale) => Promise<void>;
 
   generateReceiptText: (customer: CustomerTab, sale?: Sale) => string;
   getWhatsAppShareUrl: (phone: string, text: string) => string;
@@ -44,6 +79,7 @@ export const useTabStore = create<TabState>((set, get) => ({
   customers: [],
   searchQuery: '',
   selectedCustomerId: null,
+  isMutatingTab: false,
 
   loadTabs: async () => {
     try {
@@ -59,7 +95,11 @@ export const useTabStore = create<TabState>((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedCustomerId: (id) => set({ selectedCustomerId: id }),
 
-  addTab: (nameOrData, phoneArg, churchGroupArg) => {
+  addTab: async (nameOrData, phoneArg, churchGroupArg) => {
+    if (get().isMutatingTab) {
+      return { success: false, error: 'Operación en curso, espera un momento...' };
+    }
+
     let name: string;
     let phone: string;
     let churchGroup: string;
@@ -67,143 +107,202 @@ export const useTabStore = create<TabState>((set, get) => ({
     let initialDebt = 0;
 
     if (typeof nameOrData === 'object' && nameOrData !== null) {
-      name = nameOrData.name;
-      phone = nameOrData.phone || '';
-      churchGroup = nameOrData.churchGroup || 'Congregación';
-      initialBalance = nameOrData.balance ?? 0;
-      initialDebt = nameOrData.debt ?? 0;
+      name = (nameOrData.name || '').trim();
+      phone = (nameOrData.phone || '').trim();
+      churchGroup = (nameOrData.churchGroup || 'Congregación').trim();
+      initialBalance = Math.max(0, roundMoney(Number(nameOrData.balance ?? 0)));
+      initialDebt = Math.max(0, roundMoney(Number(nameOrData.debt ?? 0)));
     } else {
-      name = nameOrData;
-      phone = phoneArg || '';
-      churchGroup = churchGroupArg || 'Congregación';
+      name = (nameOrData || '').trim();
+      phone = (phoneArg || '').trim();
+      churchGroup = (churchGroupArg || 'Congregación').trim();
     }
 
-    const newCustomer: CustomerTab = {
-      id: `cust-${Date.now()}`,
-      name,
-      phone,
-      churchGroup,
-      balance: initialBalance,
-      debt: initialDebt,
-      movements: [],
-    };
+    if (!name) {
+      return { success: false, error: 'El nombre del cliente no puede estar vacío' };
+    }
 
-    set({ customers: [newCustomer, ...get().customers] });
-
-    insertTab({
-      id: newCustomer.id,
-      name: newCustomer.name,
-      phone: newCustomer.phone,
-      church_group: newCustomer.churchGroup,
-      balance: newCustomer.balance,
-      debt: newCustomer.debt,
-    })
-      .then((rows) => {
-        if (rows && rows[0]?.id) {
-          const realId = rows[0].id;
-          set((state) => ({
-            customers: state.customers.map((c) => (c.id === newCustomer.id ? { ...c, id: realId } : c)),
-          }));
-        }
-      })
-      .catch((error) => {
-        console.error('Error al registrar cuenta/fiado en Supabase:', error);
+    set({ isMutatingTab: true });
+    try {
+      const rows = await insertTab({
+        name,
+        phone,
+        church_group: churchGroup,
+        balance: initialBalance,
+        debt: initialDebt,
       });
 
-    return newCustomer;
+      const saved = rows?.[0];
+      const finalCustomer: CustomerTab = {
+        id: saved?.id ? String(saved.id) : `cust-${Date.now()}`,
+        name: saved?.name || name,
+        phone: saved?.phone || phone,
+        churchGroup: saved?.churchGroup || churchGroup,
+        balance: typeof saved?.balance === 'number' ? saved.balance : initialBalance,
+        debt: typeof saved?.debt === 'number' ? saved.debt : initialDebt,
+        movements: saved?.movements || [],
+      };
+
+      set((state) => ({
+        customers: [
+          finalCustomer,
+          ...state.customers.filter((c) => c.id !== finalCustomer.id),
+        ],
+      }));
+
+      return { success: true, customer: finalCustomer };
+    } catch (error: any) {
+      console.error('Error al registrar cuenta/fiado en Supabase:', error);
+      return {
+        success: false,
+        error: error?.message || 'Error de red: No se pudo guardar el cliente en Supabase',
+      };
+    } finally {
+      set({ isMutatingTab: false });
+    }
   },
 
   addCustomer: (name, phone, churchGroup) => {
     return get().addTab(name, phone, churchGroup);
   },
 
-  addPrepaidBalance: (customerId, amount, description = 'Recarga de saldo prepago', paymentMethod = 'efectivo') => {
-    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
-      return;
+  addPrepaidBalance: async (
+    customerId,
+    amount,
+    description = 'Recarga de saldo prepago',
+    paymentMethod = 'efectivo'
+  ) => {
+    if (get().isMutatingTab) {
+      return { success: false, error: 'Operación en curso, espera un momento...' };
     }
-    const cleanAmount = Number(amount.toFixed(2));
-    let updatedBalance = 0;
-    let currentDebt = 0;
+    if (!isValidPositiveMoney(amount)) {
+      return { success: false, error: 'El monto a recargar debe ser mayor a 0.00€' };
+    }
 
-    set({
-      customers: get().customers.map((c) => {
-        if (c.id !== customerId) return c;
-        const mov: TabMovement = {
-          id: `mov-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          type: 'recarga',
-          amount: cleanAmount,
-          description,
-          paymentMethod,
-        };
-        updatedBalance = Number((c.balance + cleanAmount).toFixed(2));
-        currentDebt = c.debt;
-        return {
-          ...c,
-          balance: updatedBalance,
-          movements: [mov, ...c.movements],
-        };
-      }),
-    });
+    const customer = get().customers.find((c) => c.id === customerId);
+    if (!customer) {
+      return { success: false, error: 'Cliente no encontrado' };
+    }
 
-    updateTabBalances(customerId, currentDebt, updatedBalance).catch((err) => {
+    const cleanAmount = roundMoney(amount);
+    const updatedBalance = roundMoney(Number(customer.balance || 0) + cleanAmount);
+    const currentDebt = roundMoney(Number(customer.debt || 0));
+
+    set({ isMutatingTab: true });
+    try {
+      await updateTabBalances(customerId, currentDebt, updatedBalance);
+
+      const mov: TabMovement = {
+        id: `mov-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'recarga',
+        amount: cleanAmount,
+        description,
+        paymentMethod,
+      };
+
+      let updatedCustomer: CustomerTab | undefined;
+      set((state) => ({
+        customers: state.customers.map((c) => {
+          if (c.id !== customerId) return c;
+          updatedCustomer = {
+            ...c,
+            balance: updatedBalance,
+            movements: [mov, ...(c.movements || [])],
+          };
+          return updatedCustomer;
+        }),
+      }));
+
+      return { success: true, customer: updatedCustomer };
+    } catch (err: any) {
       console.error('Error al sincronizar saldo prepago en Supabase:', err);
-    });
+      return {
+        success: false,
+        error: err?.message || 'Error de red: No se pudo guardar la recarga en Supabase',
+      };
+    } finally {
+      set({ isMutatingTab: false });
+    }
   },
 
-  payDebt: (customerId, amount, description = 'Abono de deuda pendiente', paymentMethod = 'efectivo') => {
-    if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
-      return;
+  payDebt: async (
+    customerId,
+    amount,
+    description = 'Abono de deuda pendiente',
+    paymentMethod = 'efectivo'
+  ) => {
+    if (get().isMutatingTab) {
+      return { success: false, error: 'Operación en curso, espera un momento...' };
     }
+    if (!isValidPositiveMoney(amount)) {
+      return { success: false, error: 'El monto del abono debe ser estrictamente mayor a 0.00€' };
+    }
+
     const customer = get().customers.find((c) => c.id === customerId);
-    if (!customer) return;
-
-    const cleanAmount = Number(amount.toFixed(2));
-    const currentDebt = Number((customer.debt || 0).toFixed(2));
-
-    // Blindaje QA: Un abono nunca puede superar la deuda actual del cliente ni ser <= 0
-    if (cleanAmount > currentDebt || currentDebt <= 0) {
-      return;
+    if (!customer) {
+      return { success: false, error: 'Cliente no encontrado' };
     }
 
-    let newDebt = 0;
-    let newBalance = customer.balance;
+    const cleanAmount = roundMoney(amount);
+    const currentDebt = roundMoney(Number(customer.debt || 0));
 
-    set({
-      customers: get().customers.map((c) => {
-        if (c.id !== customerId) return c;
-        newDebt = Math.max(0, Number((c.debt - cleanAmount).toFixed(2)));
-        newBalance = c.balance;
-        const mov: TabMovement = {
-          id: `mov-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          type: 'pago',
-          amount: cleanAmount,
-          description,
-          paymentMethod,
-        };
-        return {
-          ...c,
-          debt: newDebt,
-          balance: newBalance,
-          movements: [mov, ...c.movements],
-        };
-      }),
-    });
+    // Blindaje QA: comparación entera en céntimos evita falsos bloqueos/permisos por float
+    if (currentDebt <= 0 || toCents(cleanAmount) > toCents(currentDebt)) {
+      return {
+        success: false,
+        error: `El abono (${cleanAmount.toFixed(2)}€) no puede superar la deuda actual (${currentDebt.toFixed(2)}€)`,
+      };
+    }
 
-    insertTabPayment({
-      tab_id: customerId,
-      customer_name: customer?.name,
-      amount: cleanAmount,
-      payment_method: paymentMethod,
-      description,
-    }).catch((error) => {
+    const newDebt = Math.max(0, roundMoney(currentDebt - cleanAmount));
+    const newBalance = roundMoney(Number(customer.balance || 0));
+
+    set({ isMutatingTab: true });
+    try {
+      await insertTabPayment({
+        tab_id: customerId,
+        customer_name: customer.name,
+        amount: cleanAmount,
+        payment_method: paymentMethod,
+        description,
+      });
+
+      await updateTabBalances(customerId, newDebt, newBalance);
+
+      const mov: TabMovement = {
+        id: `mov-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'pago',
+        amount: cleanAmount,
+        description,
+        paymentMethod,
+      };
+
+      let updatedCustomer: CustomerTab | undefined;
+      set((state) => ({
+        customers: state.customers.map((c) => {
+          if (c.id !== customerId) return c;
+          updatedCustomer = {
+            ...c,
+            debt: newDebt,
+            balance: newBalance,
+            movements: [mov, ...(c.movements || [])],
+          };
+          return updatedCustomer;
+        }),
+      }));
+
+      return { success: true, customer: updatedCustomer };
+    } catch (error: any) {
       console.error('Error al registrar abono/pago en Supabase:', error);
-    });
-
-    updateTabBalances(customerId, newDebt, newBalance).catch((err) => {
-      console.error('Error al sincronizar deuda en Supabase:', err);
-    });
+      return {
+        success: false,
+        error: error?.message || 'Error de red: No se pudo registrar el abono en Supabase',
+      };
+    } finally {
+      set({ isMutatingTab: false });
+    }
   },
 
   payTab: (customerIdOrData, amount, description, paymentMethod) => {
@@ -212,38 +311,37 @@ export const useTabStore = create<TabState>((set, get) => ({
       const amt = customerIdOrData.amount;
       const desc = customerIdOrData.description || 'Abono de deuda pendiente';
       const method = customerIdOrData.paymentMethod || 'efectivo';
-      get().payDebt(id, amt, desc, method);
-    } else {
-      get().payDebt(customerIdOrData, amount ?? 0, description, paymentMethod);
+      return get().payDebt(id, amt, desc, method);
     }
+    return get().payDebt(customerIdOrData, amount ?? 0, description, paymentMethod);
   },
 
   addPayment: (customerIdOrData, amount, description, paymentMethod) => {
-    get().payTab(customerIdOrData, amount, description, paymentMethod);
+    return get().payTab(customerIdOrData, amount, description, paymentMethod);
   },
 
   chargeSaleToTab: (customerId, sale) => {
     let finalBalance = 0;
     let finalDebt = 0;
     let prepaidUsed = 0;
-    let netTabDebt = sale.total;
+    let netTabDebt = roundMoney(sale.total);
 
     set({
       customers: get().customers.map((c) => {
         if (c.id !== customerId) return c;
-        let remBalance = Number(c.balance || 0);
-        let remDebt = Number(c.debt || 0);
+        let remBalance = roundMoney(Number(c.balance || 0));
+        let remDebt = roundMoney(Number(c.debt || 0));
 
         if (remDebt < 0) {
-          remBalance = Number((remBalance + Math.abs(remDebt)).toFixed(2));
+          remBalance = roundMoney(remBalance + Math.abs(remDebt));
           remDebt = 0;
         }
 
-        prepaidUsed = Number(Math.min(Math.max(0, remBalance), sale.total).toFixed(2));
-        netTabDebt = Number(Math.max(0, sale.total - prepaidUsed).toFixed(2));
+        prepaidUsed = roundMoney(Math.min(Math.max(0, remBalance), sale.total));
+        netTabDebt = roundMoney(Math.max(0, sale.total - prepaidUsed));
 
-        remBalance = Number(Math.max(0, remBalance - prepaidUsed).toFixed(2));
-        remDebt = Number((remDebt + netTabDebt).toFixed(2));
+        remBalance = roundMoney(Math.max(0, remBalance - prepaidUsed));
+        remDebt = roundMoney(remDebt + netTabDebt);
 
         finalBalance = remBalance;
         finalDebt = remDebt;
@@ -266,7 +364,7 @@ export const useTabStore = create<TabState>((set, get) => ({
           ...c,
           balance: remBalance,
           debt: remDebt,
-          movements: [mov, ...c.movements],
+          movements: [mov, ...(c.movements || [])],
         };
       }),
     });
@@ -276,6 +374,57 @@ export const useTabStore = create<TabState>((set, get) => ({
     });
 
     return { newBalance: finalBalance, newDebt: finalDebt, prepaidUsed, netTabDebt };
+  },
+
+  revertSaleFromTab: async (sale) => {
+    if (sale.paymentMethod !== 'fiado') return;
+    const customer = get().customers.find(
+      (c) =>
+        (sale.customerTabId && c.id === sale.customerTabId) ||
+        (sale.customerName && c.name.trim().toLowerCase() === sale.customerName.trim().toLowerCase())
+    );
+    if (!customer) return;
+
+    const saleTotal = roundMoney(Number(sale.total || 0));
+    const prepaidRestored =
+      typeof sale.prepaidUsed === 'number' && !isNaN(sale.prepaidUsed)
+        ? Math.max(0, Math.min(saleTotal, roundMoney(sale.prepaidUsed)))
+        : 0;
+    const netDebtToRevert =
+      typeof sale.netTabDebt === 'number' && !isNaN(sale.netTabDebt)
+        ? Math.max(0, Math.min(saleTotal, roundMoney(sale.netTabDebt)))
+        : roundMoney(Math.max(0, saleTotal - prepaidRestored));
+
+    const newBalance = roundMoney(Math.max(0, Number(customer.balance || 0)) + prepaidRestored);
+    const newDebt = roundMoney(Math.max(0, Number(customer.debt || 0) - netDebtToRevert));
+
+    const reversalMov: TabMovement = {
+      id: `mov-void-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'pago',
+      amount: saleTotal,
+      description: `Anulación Ticket #${sale.id.slice(-6)} (Saldo rest.: +${prepaidRestored.toFixed(2)}€ / Deuda rev.: -${netDebtToRevert.toFixed(2)}€)`,
+      saleId: sale.id,
+    };
+
+    set((state) => ({
+      customers: state.customers.map((c) =>
+        c.id === customer.id
+          ? {
+              ...c,
+              balance: newBalance,
+              debt: newDebt,
+              movements: [reversalMov, ...(c.movements || [])],
+            }
+          : c
+      ),
+    }));
+
+    try {
+      await updateTabBalances(customer.id, newDebt, newBalance);
+    } catch (err) {
+      console.error('Error al revertir saldo/deuda de fiado anulado en Supabase:', err);
+    }
   },
 
   generateReceiptText: (customer, sale) => {

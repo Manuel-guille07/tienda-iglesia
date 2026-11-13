@@ -108,7 +108,7 @@ export const SalesHistoryScreen: React.FC = () => {
   };
 
   const handleConfirmVoid = async () => {
-    if (!selectedSaleToVoid) return;
+    if (isVoiding || !selectedSaleToVoid) return;
 
     const trimmedReason = voidReason.trim();
     if (!trimmedReason) {

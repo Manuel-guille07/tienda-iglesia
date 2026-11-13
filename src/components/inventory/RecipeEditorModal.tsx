@@ -5,6 +5,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Product, RecipeItem } from '../../types';
 import { Plus, Trash2, Coffee } from 'lucide-react';
+import { parseMoneyInput } from '../../utils/finance';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -20,6 +21,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
 
   const [selectedId, setSelectedId] = useState('');
   const [items, setItems] = useState<RecipeItem[]>([]);
+  const [qtyDrafts, setQtyDrafts] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -28,12 +30,16 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
     setConfirmDelete(false);
     if (product) {
       setSelectedId(product.id);
-      setItems(product.recipe ? [...product.recipe] : []);
+      const nextItems = product.recipe ? [...product.recipe] : [];
+      setItems(nextItems);
+      setQtyDrafts(nextItems.map((i) => String(i.quantity)));
     } else {
       const first = products[0]?.id || '';
       setSelectedId(first);
       const prod = products.find((p) => p.id === first);
-      setItems(prod?.recipe ? [...prod.recipe] : []);
+      const nextItems = prod?.recipe ? [...prod.recipe] : [];
+      setItems(nextItems);
+      setQtyDrafts(nextItems.map((i) => String(i.quantity)));
     }
   }, [product, products, isOpen]);
 
@@ -41,6 +47,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
     if (rawMaterials.length === 0) return toast.error('No hay insumos disponibles');
     const unused = rawMaterials.find((m) => !items.some((it) => it.rawMaterialId === m.id));
     setItems([...items, { rawMaterialId: unused ? unused.id : rawMaterials[0].id, quantity: 1 }]);
+    setQtyDrafts([...qtyDrafts, '1']);
   };
 
   const handleSave = () => {
@@ -108,7 +115,9 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                 setSelectedId(e.target.value);
                 setConfirmDelete(false);
                 const p = products.find((x) => x.id === e.target.value);
-                setItems(p?.recipe ? [...p.recipe] : []);
+                const nextItems = p?.recipe ? [...p.recipe] : [];
+                setItems(nextItems);
+                setQtyDrafts(nextItems.map((i) => String(i.quantity)));
               }}
               className={`w-full border rounded-2xl p-2.5 text-xs font-medium ${stoneSurface}`}
             >
@@ -176,15 +185,38 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
 
                   <div className="flex items-center gap-1 w-28 shrink-0">
                     <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={Number.isFinite(item.quantity) ? item.quantity : ''}
+                      type="text"
+                      inputMode="decimal"
+                      value={qtyDrafts[idx] ?? String(item.quantity)}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => {
-                        const parsed = parseFloat(e.target.value);
+                        const raw = e.target.value;
+                        const nextDrafts = [...qtyDrafts];
+                        if (raw === '') {
+                          nextDrafts[idx] = '';
+                          setQtyDrafts(nextDrafts);
+                          const u = [...items];
+                          u[idx] = { ...u[idx], quantity: 0 };
+                          setItems(u);
+                          return;
+                        }
+                        if (!/^\d*([.,]\d{0,2})?$/.test(raw)) return;
+                        nextDrafts[idx] = raw;
+                        setQtyDrafts(nextDrafts);
+                        const parsed = parseMoneyInput(raw);
+                        if (parsed !== null) {
+                          const u = [...items];
+                          u[idx] = { ...u[idx], quantity: parsed };
+                          setItems(u);
+                        }
+                      }}
+                      onBlur={() => {
+                        const safeVal = parseMoneyInput(qtyDrafts[idx] ?? String(item.quantity)) ?? 0;
+                        const nextDrafts = [...qtyDrafts];
+                        nextDrafts[idx] = String(safeVal);
+                        setQtyDrafts(nextDrafts);
                         const u = [...items];
-                        u[idx].quantity = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
+                        u[idx] = { ...u[idx], quantity: safeVal };
                         setItems(u);
                       }}
                       className={`w-16 border rounded-lg p-1 text-xs text-center font-bold tabular-nums ${inputSurface}`}
@@ -196,7 +228,10 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
 
                   <button
                     type="button"
-                    onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                    onClick={() => {
+                      setItems(items.filter((_, i) => i !== idx));
+                      setQtyDrafts(qtyDrafts.filter((_, i) => i !== idx));
+                    }}
                     className={`p-1 hover:text-rose-600 cursor-pointer ${secondaryText}`}
                     title="Quitar de receta"
                   >
