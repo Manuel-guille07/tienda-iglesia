@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { CustomerTab, Sale, TabMovement } from '../types';
-import { getTabs, insertTab, insertTabPayment, updateTabBalances } from '../services/db';
+import { getTabs, getTabPayments, insertTab, insertTabPayment, updateTabBalances } from '../services/db';
+import { useCloseoutStore } from './useCloseoutStore';
 import { roundMoney, toCents, isValidPositiveMoney } from '../utils/finance';
 
 export interface TabMutationResult {
@@ -83,9 +84,51 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   loadTabs: async () => {
     try {
-      const data = await getTabs();
+      const [data, paymentsData] = await Promise.all([getTabs(), getTabPayments()]);
       if (data && data.length > 0) {
-        set({ customers: data as CustomerTab[] });
+        const existingById = new Map(get().customers.map((c) => [c.id, c]));
+        const hydrated = (data as CustomerTab[]).map((c) => {
+          const prevMovements = existingById.get(c.id)?.movements || [];
+          const dbMovements: TabMovement[] = (paymentsData || [])
+            .filter(
+              (p: any) =>
+                (p.tabId && String(p.tabId) === String(c.id)) ||
+                (!p.tabId &&
+                  (p.customerName || p.clientName || '').trim().toLowerCase() ===
+                    c.name.trim().toLowerCase())
+            )
+            .map((p: any) => ({
+              id: p.id ? String(p.id) : `mov-${p.timestamp}`,
+              timestamp: p.timestamp || new Date().toISOString(),
+              type: 'pago' as const,
+              amount: Number(p.amount ?? 0),
+              description: p.description || 'Abono de deuda pendiente',
+              paymentMethod: p.paymentMethod === 'datafono' ? 'datafono' : 'efectivo',
+            }));
+
+          const mergedMovements: TabMovement[] = [...dbMovements];
+          for (const pm of prevMovements) {
+            const isDup = mergedMovements.some(
+              (m) =>
+                m.id === pm.id ||
+                (m.type === pm.type &&
+                  toCents(m.amount) === toCents(pm.amount) &&
+                  Math.abs(new Date(m.timestamp).getTime() - new Date(pm.timestamp).getTime()) < 5000)
+            );
+            if (!isDup) {
+              mergedMovements.push(pm);
+            }
+          }
+          mergedMovements.sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+
+          return {
+            ...c,
+            movements: mergedMovements,
+          };
+        });
+        set({ customers: hydrated });
       }
     } catch (error) {
       console.error('[useTabStore] Error al cargar tabs desde Supabase:', error);
@@ -260,7 +303,7 @@ export const useTabStore = create<TabState>((set, get) => ({
 
     set({ isMutatingTab: true });
     try {
-      await insertTabPayment({
+      const savedPayments = await insertTabPayment({
         tab_id: customerId,
         customer_name: customer.name,
         amount: cleanAmount,
@@ -270,9 +313,13 @@ export const useTabStore = create<TabState>((set, get) => ({
 
       await updateTabBalances(customerId, newDebt, newBalance);
 
+      const savedRow = savedPayments?.[0];
+      const paymentTimestamp = savedRow?.timestamp || new Date().toISOString();
+      const paymentId = savedRow?.id ? String(savedRow.id) : `mov-${Date.now()}`;
+
       const mov: TabMovement = {
-        id: `mov-${Date.now()}`,
-        timestamp: new Date().toISOString(),
+        id: paymentId,
+        timestamp: paymentTimestamp,
         type: 'pago',
         amount: cleanAmount,
         description,
@@ -292,6 +339,18 @@ export const useTabStore = create<TabState>((set, get) => ({
           return updatedCustomer;
         }),
       }));
+
+      // Sincronizar inmediatamente con las métricas del turno activo en useCloseoutStore
+      useCloseoutStore.getState().addTabPayment({
+        id: paymentId,
+        tabId: customerId,
+        customerName: customer.name,
+        amount: cleanAmount,
+        paymentMethod,
+        timestamp: paymentTimestamp,
+        description,
+      });
+      useCloseoutStore.getState().loadShiftTabPayments().catch(() => {});
 
       return { success: true, customer: updatedCustomer };
     } catch (error: any) {

@@ -153,6 +153,9 @@ export interface ShiftClose {
   tabPaymentsCash?: number;
   salesCard?: number;
   tabPaymentsCard?: number;
+  totalTabPayments?: number;
+  donativosCash?: number;
+  donativosCard?: number;
   totalCafes?: number;
   totalRestoCafeteria?: number;
   soldItemsSummary?: SoldItemSummary[];

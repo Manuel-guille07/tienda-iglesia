@@ -63,6 +63,7 @@ const App: React.FC = () => {
       },
       onTabChange: () => {
         useTabStore.getState().loadTabs();
+        useCloseoutStore.getState().loadShiftTabPayments();
       },
       onProfileChange: () => {
         useAuthStore.getState().loadProfiles();

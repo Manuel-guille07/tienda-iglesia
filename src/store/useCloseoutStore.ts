@@ -1,14 +1,62 @@
 import { create } from 'zustand';
 import { Incident, ShiftClose, Role, Sale, VoidAuditRecord, TabCreditRecord } from '../types';
-import { getCloseouts, insertCloseout, getAuditLogs, insertAuditLog, fromCloseoutSnake } from '../services/db';
+import {
+  getCloseouts,
+  insertCloseout,
+  getAuditLogs,
+  insertAuditLog,
+  fromCloseoutSnake,
+  getTabPayments,
+} from '../services/db';
+import { fromCents, toCents } from '../utils/finance';
 import toast from 'react-hot-toast';
 
 export interface TabPaymentExport {
+  id?: string;
+  tabId?: string;
   customerName: string;
   amount: number;
   paymentMethod: 'efectivo' | 'datafono';
   timestamp: string;
   description?: string;
+}
+
+function mapRawTabPayment(row: any): TabPaymentExport {
+  const rawMethod = String(row.paymentMethod ?? row.payment_method ?? 'efectivo').toLowerCase().trim();
+  const paymentMethod: 'efectivo' | 'datafono' =
+    rawMethod === 'datafono' || rawMethod === 'datáfono' || rawMethod === 'tarjeta' || rawMethod === 'card'
+      ? 'datafono'
+      : 'efectivo';
+  return {
+    id: row.id ? String(row.id) : undefined,
+    tabId: row.tabId || row.tab_id ? String(row.tabId || row.tab_id) : undefined,
+    customerName: row.customerName || row.clientName || row.customer_name || row.client_name || 'Cliente',
+    amount: Number(row.amount ?? 0),
+    paymentMethod,
+    timestamp: row.timestamp || row.created_at || new Date().toISOString(),
+    description: row.description || 'Abono de deuda pendiente',
+  };
+}
+
+function dedupeTabPayments(payments: TabPaymentExport[]): TabPaymentExport[] {
+  const result: TabPaymentExport[] = [];
+  for (const p of payments) {
+    if (!p || !(p.amount > 0)) continue;
+    const isDup = result.some(
+      (existing) =>
+        (p.id && existing.id && p.id === existing.id) ||
+        (existing.customerName.trim().toLowerCase() === p.customerName.trim().toLowerCase() &&
+          toCents(existing.amount) === toCents(p.amount) &&
+          existing.paymentMethod === p.paymentMethod &&
+          Math.abs(new Date(existing.timestamp).getTime() - new Date(p.timestamp).getTime()) < 5000)
+    );
+    if (!isDup) {
+      result.push(p);
+    }
+  }
+  return result.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 }
 
 /**
@@ -72,11 +120,15 @@ interface CloseoutState {
   shiftCloses: ShiftClose[];
   voidAudits: VoidAuditRecord[];
   tabCredits: TabCreditRecord[];
+  tabPayments: TabPaymentExport[];
+  shiftTabPayments: TabPaymentExport[];
   lastCloseTimestamp: string | null;
   isSyncingSheets: boolean;
   isClosingShift: boolean;
 
   loadCloseouts: () => Promise<void>;
+  loadShiftTabPayments: (sinceTimestamp?: string | null) => Promise<TabPaymentExport[]>;
+  addTabPayment: (payment: TabPaymentExport) => void;
   addIncident: (text: string, category: Incident['category'], author: string, role: Role) => Incident;
   addVoidAudit: (record: Omit<VoidAuditRecord, 'id'>) => VoidAuditRecord;
   addTabCredit: (record: Omit<TabCreditRecord, 'id'>) => void;
@@ -93,6 +145,8 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
   shiftCloses: [],
   voidAudits: [],
   tabCredits: [],
+  tabPayments: [],
+  shiftTabPayments: [],
   lastCloseTimestamp: null,
   isSyncingSheets: false,
   isClosingShift: false,
@@ -114,33 +168,39 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
             new Date(a.timestamp || a.created_at || 0).getTime()
         );
         latestTimestamp = sortedCloseouts[0].timestamp || sortedCloseouts[0].created_at || null;
-        shiftCloses = sortedCloseouts.map((c: any) => ({
-          id: c.id,
-          timestamp: c.created_at || c.timestamp || new Date().toISOString(),
-          closedBy: c.closed_by_user || c.closedBy || 'Usuario',
-          role: (c.closed_by_role || c.role || 'Vendedor') as Role,
-          expectedCash: Number(c.expected_cash ?? c.expectedCash ?? 0),
-          actualCash: Number(c.counted_cash ?? c.actualCash ?? 0),
-          totalCard: Number(c.card_total ?? c.totalCard ?? 0),
-          totalFiados: Number(c.tabs_total ?? c.totalFiados ?? 0),
-          totalDonativos: Number(c.donations_total ?? c.totalDonativos ?? 0),
-          totalConsumoInterno: Number(c.consumption_total ?? c.totalConsumoInterno ?? 0),
-          totalCoffeesSold: Number(c.coffees_count ?? c.totalCoffeesSold ?? 0),
-          totalSalesCount: Number(c.sales_count ?? c.totalSalesCount ?? 0),
-          totalRevenue: Number(
-            c.revenue_total ??
-              c.totalRevenue ??
-              Number(c.expected_cash ?? 0) + Number(c.card_total ?? 0)
-          ),
-          difference: Number(c.discrepancy ?? c.difference ?? 0),
-          notes: c.notes || '',
-          incidents: [],
-          exportStatus: 'synced',
-          salesCash: Number(c.sales_cash ?? c.salesCash ?? 0),
-          tabPaymentsCash: Number(c.tabs_cash ?? c.tabPaymentsCash ?? 0),
-          salesCard: Number(c.sales_card ?? c.salesCard ?? 0),
-          tabPaymentsCard: Number(c.tabs_card ?? c.tabPaymentsCard ?? 0),
-        }));
+        shiftCloses = sortedCloseouts.map((c: any) => {
+          const tabPaymentsCash = Number(c.tabs_cash ?? c.tabPaymentsCash ?? 0);
+          const tabPaymentsCard = Number(c.tabs_card ?? c.tabPaymentsCard ?? 0);
+          const totalTabPayments = fromCents(toCents(tabPaymentsCash) + toCents(tabPaymentsCard));
+          return {
+            id: c.id,
+            timestamp: c.created_at || c.timestamp || new Date().toISOString(),
+            closedBy: c.closed_by_user || c.closedBy || 'Usuario',
+            role: (c.closed_by_role || c.role || 'Vendedor') as Role,
+            expectedCash: Number(c.expected_cash ?? c.expectedCash ?? 0),
+            actualCash: Number(c.counted_cash ?? c.actualCash ?? 0),
+            totalCard: Number(c.card_total ?? c.totalCard ?? 0),
+            totalFiados: Number(c.tabs_total ?? c.totalFiados ?? 0),
+            totalDonativos: Number(c.donations_total ?? c.totalDonativos ?? 0),
+            totalConsumoInterno: Number(c.consumption_total ?? c.totalConsumoInterno ?? 0),
+            totalCoffeesSold: Number(c.coffees_count ?? c.totalCoffeesSold ?? 0),
+            totalSalesCount: Number(c.sales_count ?? c.totalSalesCount ?? 0),
+            totalRevenue: Number(
+              c.revenue_total ??
+                c.totalRevenue ??
+                fromCents(toCents(Number(c.expected_cash ?? 0)) + toCents(Number(c.card_total ?? 0)))
+            ),
+            difference: Number(c.discrepancy ?? c.difference ?? 0),
+            notes: c.notes || '',
+            incidents: [],
+            exportStatus: 'synced',
+            salesCash: Number(c.sales_cash ?? c.salesCash ?? 0),
+            tabPaymentsCash,
+            salesCard: Number(c.sales_card ?? c.salesCard ?? 0),
+            tabPaymentsCard,
+            totalTabPayments,
+          };
+        });
       }
 
       const voidAudits: VoidAuditRecord[] = [];
@@ -202,16 +262,93 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
             : latestTimestamp
           : latestTimestamp || currentLast;
 
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const sinceQueryTs = effectiveLatest || startOfDay.toISOString();
+
+      const [rawShiftPayments, rawAllPayments] = await Promise.all([
+        getTabPayments(sinceQueryTs),
+        getTabPayments(),
+      ]);
+
+      const mappedAll = dedupeTabPayments([
+        ...(rawAllPayments || []).map(mapRawTabPayment),
+        ...get().tabPayments,
+      ]);
+
+      const cutoffMs = effectiveLatest
+        ? new Date(effectiveLatest).getTime()
+        : startOfDay.getTime();
+
+      const mappedShift = dedupeTabPayments([
+        ...(rawShiftPayments || []).map(mapRawTabPayment),
+        ...get().shiftTabPayments,
+      ]).filter((p) => {
+        const ms = new Date(p.timestamp).getTime();
+        return !isNaN(ms) && (effectiveLatest ? ms > cutoffMs : ms >= cutoffMs);
+      });
+
       set({
         shiftCloses,
         lastCloseTimestamp: effectiveLatest,
         voidAudits,
         incidents,
         tabCredits: tabCredits.length > 0 ? tabCredits : get().tabCredits,
+        tabPayments: mappedAll,
+        shiftTabPayments: mappedShift,
       });
     } catch (error) {
       console.error('[useCloseoutStore] Error al cargar cierres y auditorías desde Supabase:', error);
     }
+  },
+
+  loadShiftTabPayments: async (sinceTimestamp) => {
+    try {
+      const effectiveLatest =
+        sinceTimestamp !== undefined ? sinceTimestamp : get().lastCloseTimestamp;
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const sinceQueryTs = effectiveLatest || startOfDay.toISOString();
+
+      const [rawShiftPayments, rawAllPayments] = await Promise.all([
+        getTabPayments(sinceQueryTs),
+        getTabPayments(),
+      ]);
+
+      const mappedAll = dedupeTabPayments([
+        ...(rawAllPayments || []).map(mapRawTabPayment),
+        ...get().tabPayments,
+      ]);
+
+      const cutoffMs = effectiveLatest
+        ? new Date(effectiveLatest).getTime()
+        : startOfDay.getTime();
+
+      const mappedShift = dedupeTabPayments([
+        ...(rawShiftPayments || []).map(mapRawTabPayment),
+        ...get().shiftTabPayments,
+      ]).filter((p) => {
+        const ms = new Date(p.timestamp).getTime();
+        return !isNaN(ms) && (effectiveLatest ? ms > cutoffMs : ms >= cutoffMs);
+      });
+
+      set({
+        tabPayments: mappedAll,
+        shiftTabPayments: mappedShift,
+      });
+      return mappedShift;
+    } catch (error) {
+      console.error('[useCloseoutStore] Error al consultar tab_payments del turno:', error);
+      return get().shiftTabPayments;
+    }
+  },
+
+  addTabPayment: (payment) => {
+    const normalized = mapRawTabPayment(payment);
+    set((state) => ({
+      tabPayments: dedupeTabPayments([normalized, ...state.tabPayments]),
+      shiftTabPayments: dedupeTabPayments([normalized, ...state.shiftTabPayments]),
+    }));
   },
 
   addIncident: (text, category, author, role) => {
@@ -343,6 +480,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
         return {
           shiftCloses: [confirmedClose, ...existingWithoutDup],
           lastCloseTimestamp: nextLastTs,
+          shiftTabPayments: [],
         };
       });
 
@@ -389,24 +527,28 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
           totalConsumoInterno: 0,
           totalCoffeesSold: 0,
           totalSalesCount: 0,
-          totalRevenue: mapped.expectedCash + mapped.totalCard,
+          totalRevenue: fromCents(toCents(mapped.expectedCash) + toCents(mapped.totalCard)),
           difference: mapped.difference,
           incidents: [],
           exportStatus: 'synced',
           tabPaymentsCash: mapped.tabPaymentsCash,
           tabPaymentsCard: mapped.tabPaymentsCard,
+          totalTabPayments: fromCents(
+            toCents(mapped.tabPaymentsCash || 0) + toCents(mapped.tabPaymentsCard || 0)
+          ),
         };
 
         set({
           shiftCloses: [remoteShiftClose, ...currentCloses],
           lastCloseTimestamp: newTimestamp,
+          shiftTabPayments: [],
         });
 
         toast.success(
           `Caja cerrada por ${remoteShiftClose.closedBy}. Turno reiniciado a 0.00€`
         );
       } else {
-        set({ lastCloseTimestamp: newTimestamp });
+        set({ lastCloseTimestamp: newTimestamp, shiftTabPayments: [] });
       }
     } else {
       get().loadCloseouts();
@@ -434,20 +576,25 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
     const dateStr = new Date(shiftClose.timestamp).toLocaleDateString('es-ES').replace(/\//g, '-');
     const filename = `cierre-caja-${dateStr}.csv`;
 
+    const totalTabPayments =
+      shiftClose.totalTabPayments ??
+      fromCents(toCents(shiftClose.tabPaymentsCash || 0) + toCents(shiftClose.tabPaymentsCard || 0));
+
     const rows: (string | number)[][] = [
       ['INFORME DE CIERRE DE CAJA - CHIRINGUITO IGLESIA'],
       ['Fecha y Hora', new Date(shiftClose.timestamp).toLocaleString('es-ES')],
       ['Responsable', `${shiftClose.closedBy} (${shiftClose.role})`],
       [''],
       ['CONCEPTO', 'IMPORTE (€)'],
-      ['Ventas en Efectivo', (shiftClose.salesCash ?? (shiftClose.expectedCash - (shiftClose.tabPaymentsCash || 0))).toFixed(2)],
-      ['Abonos de Fiados en Efectivo', (shiftClose.tabPaymentsCash || 0).toFixed(2)],
+      ['Ventas de Hoy en Efectivo', (shiftClose.salesCash ?? (shiftClose.expectedCash - (shiftClose.tabPaymentsCash || 0))).toFixed(2)],
+      ['Abonos Recibidos (Deudas previas) - Efectivo', (shiftClose.tabPaymentsCash || 0).toFixed(2)],
       ['Efectivo Total Esperado en Caja', shiftClose.expectedCash.toFixed(2)],
       ['Efectivo Físico Contado', shiftClose.actualCash.toFixed(2)],
       ['Diferencia / Descuadre', shiftClose.difference.toFixed(2)],
-      ['Ventas por Datáfono / Tarjeta', (shiftClose.salesCard ?? (shiftClose.totalCard - (shiftClose.tabPaymentsCard || 0))).toFixed(2)],
-      ['Abonos de Fiados por Datáfono', (shiftClose.tabPaymentsCard || 0).toFixed(2)],
+      ['Ventas de Hoy por Datáfono / Tarjeta', (shiftClose.salesCard ?? (shiftClose.totalCard - (shiftClose.tabPaymentsCard || 0))).toFixed(2)],
+      ['Abonos Recibidos (Deudas previas) - Datáfono', (shiftClose.tabPaymentsCard || 0).toFixed(2)],
       ['Total Datáfono / Tarjeta Esperado', shiftClose.totalCard.toFixed(2)],
+      ['Abonos Recibidos (Deudas previas)', totalTabPayments.toFixed(2)],
       ['Total Fiados (Deuda Neta Nueva)', shiftClose.totalFiados.toFixed(2)],
       ...(shiftClose.prepaidTabsUsed && shiftClose.prepaidTabsUsed > 0
         ? [['Saldo a Favor Consumido en Fiados', shiftClose.prepaidTabsUsed.toFixed(2)]]

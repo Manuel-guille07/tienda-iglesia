@@ -34,7 +34,7 @@ export const DashboardScreen: React.FC = () => {
 
   const { sales, products, rawMaterials } = usePOSStore();
   const { customers } = useTabStore();
-  const { voidAudits } = useCloseoutStore();
+  const { voidAudits, tabPayments } = useCloseoutStore();
   const { currentUser } = useAuthStore();
 
   const [periodFilter, setPeriodFilter] = useState<'month' | '7days' | 'all'>('month');
@@ -61,6 +61,23 @@ export const DashboardScreen: React.FC = () => {
     });
   }, [sales, periodFilter, currentMonth, currentYear, now]);
 
+  const filteredTabPayments = useMemo(() => {
+    return (tabPayments || []).filter((p) => {
+      if (!p.timestamp) return true;
+      const d = new Date(p.timestamp);
+      if (isNaN(d.getTime())) return true;
+
+      if (periodFilter === 'month') {
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      }
+      if (periodFilter === '7days') {
+        const diffDays = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays <= 7;
+      }
+      return true;
+    });
+  }, [tabPayments, periodFilter, currentMonth, currentYear, now]);
+
   const monthlySales = useMemo(() => {
     return sales.filter((s) => {
       if (!s.timestamp) return false;
@@ -68,6 +85,14 @@ export const DashboardScreen: React.FC = () => {
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
   }, [sales, currentMonth, currentYear]);
+
+  const monthlyTabPayments = useMemo(() => {
+    return (tabPayments || []).filter((p) => {
+      if (!p.timestamp) return false;
+      const d = new Date(p.timestamp);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    });
+  }, [tabPayments, currentMonth, currentYear]);
 
   const cafeteriaSales = useMemo(
     () =>
@@ -85,20 +110,29 @@ export const DashboardScreen: React.FC = () => {
     [monthlySales]
   );
 
-  const monthlyRevenue = useMemo(
-    () => fromCents(cafeteriaMonthlySales.reduce((acc, s) => acc + toCents(s.total || 0), 0)),
-    [cafeteriaMonthlySales]
-  );
+  const monthlyRevenue = useMemo(() => {
+    const salesCents = cafeteriaMonthlySales
+      .filter((s) => s.paymentMethod !== 'fiado')
+      .reduce((acc, s) => acc + toCents(s.total || 0), 0);
+    const abonosCents = monthlyTabPayments.reduce((acc, p) => acc + toCents(p.amount || 0), 0);
+    return fromCents(salesCents + abonosCents);
+  }, [cafeteriaMonthlySales, monthlyTabPayments]);
 
-  const periodRevenue = useMemo(
-    () => fromCents(cafeteriaSales.reduce((acc, s) => acc + toCents(s.total || 0), 0)),
-    [cafeteriaSales]
-  );
+  const periodRevenue = useMemo(() => {
+    const salesCents = cafeteriaSales
+      .filter((s) => s.paymentMethod !== 'fiado')
+      .reduce((acc, s) => acc + toCents(s.total || 0), 0);
+    const abonosCents = filteredTabPayments.reduce((acc, p) => acc + toCents(p.amount || 0), 0);
+    return fromCents(salesCents + abonosCents);
+  }, [cafeteriaSales, filteredTabPayments]);
 
   const averageTicket = useMemo(() => {
     if (cafeteriaSales.length === 0) return 0;
-    return periodRevenue / cafeteriaSales.length;
-  }, [cafeteriaSales, periodRevenue]);
+    const grossSales = fromCents(
+      cafeteriaSales.reduce((acc, s) => acc + toCents(s.total || 0), 0)
+    );
+    return grossSales / cafeteriaSales.length;
+  }, [cafeteriaSales]);
 
   const tabsStats = useMemo(() => {
     const totalDebt = customers.reduce((acc, c) => acc + (Number(c.debt) || 0), 0);
@@ -132,12 +166,21 @@ export const DashboardScreen: React.FC = () => {
       }
     });
 
+    (tabPayments || []).forEach((p) => {
+      if (!p.timestamp) return;
+      const key = p.timestamp.split('T')[0];
+      const bucket = days.find((d) => d.dateKey === key);
+      if (bucket) {
+        bucket.total = fromCents(toCents(bucket.total) + toCents(p.amount || 0));
+      }
+    });
+
     const maxDayTotal = Math.max(...days.map((d) => d.total), 1);
     return days.map((d) => ({
       ...d,
       pct: Math.round((d.total / maxDayTotal) * 100),
     }));
-  }, [sales, now]);
+  }, [sales, tabPayments, now]);
 
   const salesByTimeSlot = useMemo(() => {
     const slots = [
@@ -211,16 +254,22 @@ export const DashboardScreen: React.FC = () => {
   }, [cafeteriaSales, products, periodRevenue]);
 
   const paymentBreakdown = useMemo(() => {
-    const cashTotal = fromCents(
-      filteredSales
-        .filter((s) => s.paymentMethod === 'efectivo')
-        .reduce((a, s) => a + toCents(s.total || 0), 0)
-    );
-    const cardTotal = fromCents(
-      filteredSales
-        .filter((s) => s.paymentMethod === 'datafono')
-        .reduce((a, s) => a + toCents(s.total || 0), 0)
-    );
+    const salesCashCents = filteredSales
+      .filter((s) => s.paymentMethod === 'efectivo')
+      .reduce((a, s) => a + toCents(s.total || 0), 0);
+    const abonosCashCents = filteredTabPayments
+      .filter((p) => p.paymentMethod === 'efectivo')
+      .reduce((a, p) => a + toCents(p.amount || 0), 0);
+    const cashTotal = fromCents(salesCashCents + abonosCashCents);
+
+    const salesCardCents = filteredSales
+      .filter((s) => s.paymentMethod === 'datafono')
+      .reduce((a, s) => a + toCents(s.total || 0), 0);
+    const abonosCardCents = filteredTabPayments
+      .filter((p) => p.paymentMethod === 'datafono')
+      .reduce((a, p) => a + toCents(p.amount || 0), 0);
+    const cardTotal = fromCents(salesCardCents + abonosCardCents);
+
     const tabTotal = fromCents(
       filteredSales
         .filter((s) => s.paymentMethod === 'fiado')
@@ -244,7 +293,9 @@ export const DashboardScreen: React.FC = () => {
         label: 'Efectivo',
         amount: cashTotal,
         pct: calcPct(cashTotal),
-        count: filteredSales.filter((s) => s.paymentMethod === 'efectivo').length,
+        count:
+          filteredSales.filter((s) => s.paymentMethod === 'efectivo').length +
+          filteredTabPayments.filter((p) => p.paymentMethod === 'efectivo').length,
         color: 'bg-emerald-600',
         textColor: isDark ? 'text-emerald-400' : 'text-emerald-800',
       },
@@ -252,7 +303,9 @@ export const DashboardScreen: React.FC = () => {
         label: 'Tarjeta / Datáfono',
         amount: cardTotal,
         pct: calcPct(cardTotal),
-        count: filteredSales.filter((s) => s.paymentMethod === 'datafono').length,
+        count:
+          filteredSales.filter((s) => s.paymentMethod === 'datafono').length +
+          filteredTabPayments.filter((p) => p.paymentMethod === 'datafono').length,
         color: 'bg-indigo-600',
         textColor: isDark ? 'text-indigo-300' : 'text-indigo-800',
       },
@@ -273,7 +326,7 @@ export const DashboardScreen: React.FC = () => {
         textColor: isDark ? 'text-purple-300' : 'text-purple-800',
       },
     };
-  }, [filteredSales, isDark]);
+  }, [filteredSales, filteredTabPayments, isDark]);
 
   const periodLabel =
     periodFilter === 'month'
@@ -359,7 +412,12 @@ export const DashboardScreen: React.FC = () => {
             size="sm"
             icon={<Download className="w-3.5 h-3.5" />}
             onClick={() => {
-              exportSalesHistoryToCSV(filteredSales, voidAudits, periodLabel);
+              exportSalesHistoryToCSV(
+                filteredSales,
+                voidAudits,
+                periodLabel,
+                filteredTabPayments
+              );
               toast.success(t('export.csvSuccess'));
             }}
           >
@@ -755,6 +813,7 @@ export const DashboardScreen: React.FC = () => {
             },
           ],
           sales: filteredSales,
+          tabPayments: filteredTabPayments,
           voidAudits,
         }}
       />

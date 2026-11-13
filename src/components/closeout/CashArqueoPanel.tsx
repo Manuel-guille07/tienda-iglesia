@@ -62,30 +62,26 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
           <strong className="text-lg font-bold tabular-nums">{expectedCash.toFixed(2)} €</strong>
         </div>
 
-        {(tabPaymentsCash > 0 || donativosCash > 0) && (
-          <div
-            className={`pt-2 border-t text-xs space-y-1 ${
-              isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#6E665E]'
-            }`}
-          >
-            <div className="flex justify-between">
-              <span>• Ventas en mostrador:</span>
-              <span className="font-medium tabular-nums">{salesCash.toFixed(2)} €</span>
-            </div>
-            {tabPaymentsCash > 0 && (
-              <div className="flex justify-between">
-                <span>• Abonos de fiados recibidos:</span>
-                <span className="font-medium tabular-nums">+{tabPaymentsCash.toFixed(2)} €</span>
-              </div>
-            )}
-            {donativosCash > 0 && (
-              <div className="flex justify-between">
-                <span>• Donativos en efectivo:</span>
-                <span className="font-medium tabular-nums">+{donativosCash.toFixed(2)} €</span>
-              </div>
-            )}
+        <div
+          className={`pt-2 border-t text-xs space-y-1 ${
+            isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#6E665E]'
+          }`}
+        >
+          <div className="flex justify-between">
+            <span>• Ventas de Hoy (Efectivo):</span>
+            <span className="font-medium tabular-nums">{salesCash.toFixed(2)} €</span>
           </div>
-        )}
+          <div className="flex justify-between">
+            <span>• Abonos Recibidos (Deudas previas):</span>
+            <span className="font-medium tabular-nums">+{tabPaymentsCash.toFixed(2)} €</span>
+          </div>
+          {donativosCash > 0 && (
+            <div className="flex justify-between">
+              <span>• Donativos en efectivo:</span>
+              <span className="font-medium tabular-nums">+{donativosCash.toFixed(2)} €</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div>

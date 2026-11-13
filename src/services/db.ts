@@ -299,14 +299,20 @@ export function toTabPaymentSnake(item: Record<string, any>) {
 }
 
 export function fromTabPaymentSnake(row: Record<string, any>) {
-  const clientName = row.client_name ?? row.customer_name ?? row.customerName ?? '';
-  const paymentMethod = row.payment_method ?? row.paymentMethod ?? 'efectivo';
+  const clientName = row.client_name ?? row.customer_name ?? row.customerName ?? 'Cliente';
+  const rawMethod = String(row.payment_method ?? row.paymentMethod ?? 'efectivo')
+    .toLowerCase()
+    .trim();
+  const paymentMethod: 'efectivo' | 'datafono' =
+    rawMethod === 'datafono' || rawMethod === 'tarjeta' || rawMethod === 'card'
+      ? 'datafono'
+      : 'efectivo';
   const tabId = row.tab_id ?? row.tabId ?? '';
 
   return {
     id: String(row.id),
-    tabId,
-    tab_id: tabId,
+    tabId: String(tabId),
+    tab_id: String(tabId),
     clientName,
     client_name: clientName,
     customerName: clientName,
@@ -314,7 +320,7 @@ export function fromTabPaymentSnake(row: Record<string, any>) {
     amount: Number(row.amount ?? 0),
     paymentMethod,
     payment_method: paymentMethod,
-    description: row.description || '',
+    description: row.description || 'Abono de deuda pendiente',
     timestamp: row.created_at || row.timestamp || new Date().toISOString(),
   };
 }
@@ -696,17 +702,43 @@ export async function updateTabBalances(tabId: string, debtAmount: number, prepa
 }
 
 // --- TAB PAYMENTS ---
-export async function getTabPayments() {
+export async function getTabPayments(sinceTimestamp?: string | null) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('tab_payments')
-      .select('*');
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    const hasValidSince =
+      Boolean(sinceTimestamp) && !isNaN(new Date(sinceTimestamp as string).getTime());
+
+    if (hasValidSince) {
+      query = query.gt('created_at', sinceTimestamp as string);
+    }
+
+    let { data, error } = await query;
+
+    // Fallback seguro si el ordenamiento o filtro por created_at falla en esquema personalizado
+    if (error) {
+      const retry = await supabase.from('tab_payments').select('*');
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.warn('[Supabase] getTabPayments warning:', error);
       return [];
     }
-    return (data || []).map(fromTabPaymentSnake);
+
+    const mapped = (data || []).map(fromTabPaymentSnake);
+    if (hasValidSince) {
+      const sinceMs = new Date(sinceTimestamp as string).getTime();
+      return mapped.filter((p: any) => {
+        const ms = new Date(p.timestamp).getTime();
+        return !isNaN(ms) && ms > sinceMs;
+      });
+    }
+    return mapped;
   } catch (err) {
     console.warn('[Supabase] getTabPayments catch:', err);
     return [];

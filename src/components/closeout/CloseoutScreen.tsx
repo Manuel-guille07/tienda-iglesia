@@ -1,6 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
-import { useCloseoutStore, calculateShiftTabBreakdown } from '../../store/useCloseoutStore';
+import {
+  useCloseoutStore,
+  calculateShiftTabBreakdown,
+  TabPaymentExport,
+} from '../../store/useCloseoutStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -45,6 +49,9 @@ export const CloseoutScreen: React.FC = () => {
     lastCloseTimestamp,
     voidAudits,
     tabCredits,
+    tabPayments: allStoreTabPayments,
+    shiftTabPayments: storeShiftTabPayments,
+    loadShiftTabPayments,
     addIncident,
     recordShiftClose,
     exportToGoogleSheets,
@@ -60,23 +67,16 @@ export const CloseoutScreen: React.FC = () => {
   const [isClosingShift, setIsClosingShift] = useState(false);
   const closingLock = isClosingShift || isStoreClosingShift;
 
-  const allTabPayments = customers.flatMap((c) =>
-    (c.movements || [])
-      .filter((m) => m.type === 'pago')
-      .map((m) => ({
-        customerName: c.name,
-        amount: m.amount,
-        paymentMethod: (m.paymentMethod || 'efectivo') as 'efectivo' | 'datafono',
-        timestamp: m.timestamp,
-        description: m.description,
-      }))
-  );
-
   const lastClose = shiftCloses[0];
   const latestCloseMs = Math.max(
     lastClose?.timestamp ? new Date(lastClose.timestamp).getTime() : 0,
     lastCloseTimestamp ? new Date(lastCloseTimestamp).getTime() : 0
   );
+
+  useEffect(() => {
+    const sinceIso = latestCloseMs > 0 ? new Date(latestCloseMs).toISOString() : null;
+    loadShiftTabPayments(sinceIso);
+  }, [latestCloseMs, loadShiftTabPayments]);
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -97,7 +97,49 @@ export const CloseoutScreen: React.FC = () => {
     [sales, latestCloseMs]
   );
 
-  const shiftTabPayments = allTabPayments.filter((p) => isAfterLastCloseout(p.timestamp));
+  const shiftTabPayments = useMemo(() => {
+    const localTabPayments: TabPaymentExport[] = customers.flatMap((c) =>
+      (c.movements || [])
+        .filter((m) => m.type === 'pago' && !m.saleId && isAfterLastCloseout(m.timestamp))
+        .map((m) => ({
+          id: m.id,
+          tabId: c.id,
+          customerName: c.name,
+          amount: m.amount,
+          paymentMethod: (m.paymentMethod === 'datafono' ? 'datafono' : 'efectivo') as
+            | 'efectivo'
+            | 'datafono',
+          timestamp: m.timestamp,
+          description: m.description,
+        }))
+    );
+
+    const dbShiftPayments = [
+      ...storeShiftTabPayments,
+      ...allStoreTabPayments.filter((p) => isAfterLastCloseout(p.timestamp)),
+    ].filter((p) => isAfterLastCloseout(p.timestamp));
+
+    const combined: TabPaymentExport[] = [];
+    for (const p of [...dbShiftPayments, ...localTabPayments]) {
+      if (!p || !(p.amount > 0)) continue;
+      const isDup = combined.some(
+        (existing) =>
+          (p.id && existing.id && p.id === existing.id) ||
+          (existing.customerName.trim().toLowerCase() === p.customerName.trim().toLowerCase() &&
+            toCents(existing.amount) === toCents(p.amount) &&
+            existing.paymentMethod === p.paymentMethod &&
+            Math.abs(new Date(existing.timestamp).getTime() - new Date(p.timestamp).getTime()) < 5000)
+      );
+      if (!isDup) {
+        combined.push(p);
+      }
+    }
+
+    return combined.sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeShiftTabPayments, allStoreTabPayments, customers, latestCloseMs]);
 
   const sellersInShift = Array.from(
     shiftSales.reduce((map, s) => {
@@ -140,12 +182,16 @@ export const CloseoutScreen: React.FC = () => {
       .reduce((sum, p) => sum + toCents(p.amount), 0)
   );
 
+  const totalTabPayments = fromCents(toCents(tabPaymentsCash) + toCents(tabPaymentsCard));
+
   const expectedCash = fromCents(
     toCents(salesCash) + toCents(tabPaymentsCash) + toCents(donativosCash)
   );
   const totalCard = fromCents(
     toCents(salesCard) + toCents(tabPaymentsCard) + toCents(donativosCard)
   );
+  const totalRevenue = fromCents(toCents(expectedCash) + toCents(totalCard));
+
   const {
     netFiados: totalFiados,
     grossFiados: totalFiadosGross,
@@ -182,13 +228,14 @@ export const CloseoutScreen: React.FC = () => {
     totalConsumoInterno: totalConsumo,
     totalCoffeesSold: totalCoffees,
     totalSalesCount: shiftSales.length,
-    totalRevenue: fromCents(toCents(expectedCash) + toCents(totalCard)),
+    totalRevenue,
     difference,
     incidents,
     salesCash,
     tabPaymentsCash,
     salesCard,
     tabPaymentsCard,
+    totalTabPayments,
     totalCafes,
     totalRestoCafeteria,
     soldItemsSummary,
@@ -221,11 +268,31 @@ export const CloseoutScreen: React.FC = () => {
     });
   };
 
+  const getHistoricalCloseTabPayments = (close: ShiftClose, idx: number) => {
+    const endMs = new Date(close.timestamp).getTime();
+    const prevClose = shiftCloses[idx + 1];
+    const startMs = prevClose ? new Date(prevClose.timestamp).getTime() : 0;
+    return allStoreTabPayments.filter((p) => {
+      const ms = new Date(p.timestamp).getTime();
+      if (isNaN(ms)) return false;
+      if (startMs > 0) {
+        return ms > startMs && ms <= endMs;
+      }
+      const closeDayStart = new Date(close.timestamp);
+      closeDayStart.setHours(0, 0, 0, 0);
+      return ms >= closeDayStart.getTime() && ms <= endMs;
+    });
+  };
+
   const selectedHistoricalClose =
     selectedHistoricalIndex !== null ? shiftCloses[selectedHistoricalIndex] : null;
   const historicalSales =
     selectedHistoricalClose && selectedHistoricalIndex !== null
       ? getHistoricalCloseSales(selectedHistoricalClose, selectedHistoricalIndex)
+      : [];
+  const historicalTabPayments =
+    selectedHistoricalClose && selectedHistoricalIndex !== null
+      ? getHistoricalCloseTabPayments(selectedHistoricalClose, selectedHistoricalIndex)
       : [];
   const historicalFiadosNet = selectedHistoricalClose
     ? selectedHistoricalClose.totalFiados > 0
@@ -470,11 +537,32 @@ export const CloseoutScreen: React.FC = () => {
                   {totalRestoCafeteria.toFixed(2)} €
                 </span>
               </div>
+
+              <div className={`p-4 rounded-2xl border flex items-center justify-between ${innerSurface}`}>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                      isDark ? 'bg-[#2A2420] text-[#F4F0EA]' : 'bg-[#E5E0D8] text-[#141210]'
+                    }`}
+                  >
+                    <Banknote className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold block">Abonos Recibidos (Deudas previas)</span>
+                    <span className={`text-[11px] ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
+                      Pagos de deudas (Efec.: {tabPaymentsCash.toFixed(2)} € · Dat.: {tabPaymentsCard.toFixed(2)} €)
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xl font-bold font-mono tabular-nums">
+                  {totalTabPayments.toFixed(2)} €
+                </span>
+              </div>
             </div>
           </div>
 
           <p className={`text-xs mt-4 pt-3 border-t ${isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#141210]'}`}>
-            Desglose automático sobre las ventas activas del turno.
+            Desglose automático sobre las ventas activas y abonos recibidos del turno.
           </p>
         </div>
 
@@ -648,6 +736,7 @@ export const CloseoutScreen: React.FC = () => {
                   { label: 'Donativos', value: `${selectedHistoricalClose.totalDonativos.toFixed(2)}€` },
                 ],
                 sales: historicalSales,
+                tabPayments: historicalTabPayments,
                 shiftClose: selectedHistoricalClose,
                 voidAudits,
               }
@@ -664,6 +753,7 @@ export const CloseoutScreen: React.FC = () => {
                   { label: 'Donativos', value: `${totalDonativos.toFixed(2)}€` },
                 ],
                 sales: shiftSales,
+                tabPayments: shiftTabPayments,
                 shiftClose: getShift(),
                 voidAudits: shiftVoidAudits,
               }

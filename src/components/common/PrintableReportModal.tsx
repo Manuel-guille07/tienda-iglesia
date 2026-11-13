@@ -3,8 +3,21 @@ import { Sale, ShiftClose, SoldItemSummary, VoidAuditRecord } from '../../types'
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useTheme } from '../../context/ThemeContext';
-import { calculateShiftTabBreakdown, useCloseoutStore } from '../../store/useCloseoutStore';
-import { Printer, Download, FileText, Coffee, ShoppingBag, PackageCheck } from 'lucide-react';
+import {
+  calculateShiftTabBreakdown,
+  TabPaymentExport,
+  useCloseoutStore,
+} from '../../store/useCloseoutStore';
+import { fromCents, toCents } from '../../utils/finance';
+import {
+  Printer,
+  Download,
+  FileText,
+  Coffee,
+  ShoppingBag,
+  PackageCheck,
+  Banknote,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export interface PrintableReportData {
@@ -15,6 +28,7 @@ export interface PrintableReportData {
   periodLabel: string;
   kpis: { label: string; value: string; accent?: string }[];
   sales: Sale[];
+  tabPayments?: TabPaymentExport[];
   shiftClose?: Partial<ShiftClose>;
   voidAudits?: VoidAuditRecord[];
 }
@@ -144,25 +158,50 @@ export function downloadAccountingCSV(filename: string, rows: (string | number)[
 export function exportSalesHistoryToCSV(
   sales: Sale[],
   voidAudits: VoidAuditRecord[] = [],
-  periodLabel = 'General'
+  periodLabel = 'General',
+  tabPayments: TabPaymentExport[] = []
 ) {
   const dateStr = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
   const filename = `elarx-reporte-contable-${dateStr}.csv`;
 
-  const totalAmount = sales
-    .filter((s) => s.paymentMethod !== 'consumo_interno' && s.paymentMethod !== 'donativo')
-    .reduce((acc, s) => acc + (s.total || 0), 0);
-  const totalCash = sales
-    .filter((s) => s.paymentMethod === 'efectivo')
-    .reduce((acc, s) => acc + (s.total || 0), 0);
-  const totalCard = sales
-    .filter((s) => s.paymentMethod === 'datafono')
-    .reduce((acc, s) => acc + (s.total || 0), 0);
+  const totalAmount = fromCents(
+    sales
+      .filter((s) => s.paymentMethod !== 'consumo_interno' && s.paymentMethod !== 'donativo')
+      .reduce((acc, s) => acc + toCents(s.total || 0), 0)
+  );
+  const salesCash = fromCents(
+    sales
+      .filter((s) => s.paymentMethod === 'efectivo')
+      .reduce((acc, s) => acc + toCents(s.total || 0), 0)
+  );
+  const salesCard = fromCents(
+    sales
+      .filter((s) => s.paymentMethod === 'datafono')
+      .reduce((acc, s) => acc + toCents(s.total || 0), 0)
+  );
+
+  const tabPaymentsCash = fromCents(
+    tabPayments
+      .filter((p) => p.paymentMethod === 'efectivo')
+      .reduce((acc, p) => acc + toCents(p.amount || 0), 0)
+  );
+  const tabPaymentsCard = fromCents(
+    tabPayments
+      .filter((p) => p.paymentMethod === 'datafono')
+      .reduce((acc, p) => acc + toCents(p.amount || 0), 0)
+  );
+  const totalTabPayments = fromCents(toCents(tabPaymentsCash) + toCents(tabPaymentsCard));
+
+  const totalCash = fromCents(toCents(salesCash) + toCents(tabPaymentsCash));
+  const totalCard = fromCents(toCents(salesCard) + toCents(tabPaymentsCard));
+
   const { netFiados: totalTabs, prepaidUsed: totalPrepaidTabsUsed } =
     calculateShiftTabBreakdown(sales, useCloseoutStore.getState().tabCredits);
-  const totalDonations = sales
-    .filter((s) => s.paymentMethod === 'donativo')
-    .reduce((acc, s) => acc + (s.total || 0), 0);
+  const totalDonations = fromCents(
+    sales
+      .filter((s) => s.paymentMethod === 'donativo')
+      .reduce((acc, s) => acc + toCents(s.total || 0), 0)
+  );
 
   const { totalCafes, totalRestoCafeteria, soldItemsSummary } =
     calculateSalesAccountingBreakdown(sales);
@@ -176,16 +215,37 @@ export function exportSalesHistoryToCSV(
     ['Total Ventas Cafetería (Sin Donativos)', totalAmount.toFixed(2)],
     ['Total Cafés', totalCafes.toFixed(2)],
     ['Total Resto de Cafetería', totalRestoCafeteria.toFixed(2)],
-    ['Total Efectivo', totalCash.toFixed(2)],
+    ['Abonos Recibidos (Deudas previas)', totalTabPayments.toFixed(2)],
+    ['Ventas de Hoy en Efectivo', salesCash.toFixed(2)],
+    ['Abonos Recibidos (Deudas previas) - Efectivo', tabPaymentsCash.toFixed(2)],
+    ['Total Efectivo Esperado', totalCash.toFixed(2)],
+    ['Ventas de Hoy por Datáfono / Tarjeta', salesCard.toFixed(2)],
+    ['Abonos Recibidos (Deudas previas) - Datáfono', tabPaymentsCard.toFixed(2)],
     ['Total Datáfono / Tarjeta', totalCard.toFixed(2)],
     ['Total Fiados (Deuda Neta Nueva)', totalTabs.toFixed(2)],
     ...(totalPrepaidTabsUsed > 0
       ? [['Saldo a Favor Consumido en Fiados', totalPrepaidTabsUsed.toFixed(2)]]
       : []),
     ['Total Donativos', totalDonations.toFixed(2)],
+    ['Total Ingresos en Caja (Ventas + Abonos)', fromCents(toCents(totalAmount) + toCents(totalTabPayments)).toFixed(2)],
     ['Número de Tickets', sales.length],
     [''],
   ];
+
+  if (tabPayments.length > 0) {
+    rows.push(
+      ['DETALLE DE ABONOS RECIBIDOS (DEUDAS PREVIAS)'],
+      ['Fecha y Hora', 'Cliente', 'Método de Pago', 'Importe (€)', 'Descripción'],
+      ...tabPayments.map((p) => [
+        new Date(p.timestamp).toLocaleString('es-ES'),
+        p.customerName,
+        p.paymentMethod === 'datafono' ? 'DATÁFONO' : 'EFECTIVO',
+        p.amount.toFixed(2),
+        p.description || 'Abono de deuda pendiente',
+      ]),
+      ['']
+    );
+  }
 
   if (soldItemsSummary.length > 0) {
     rows.push(
@@ -261,6 +321,28 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
       ? computed.soldItemsSummary
       : report.shiftClose?.soldItemsSummary || [];
 
+  const tabPaymentsList = report.tabPayments || [];
+  const tabPaymentsCash =
+    report.shiftClose?.tabPaymentsCash !== undefined
+      ? report.shiftClose.tabPaymentsCash
+      : fromCents(
+          tabPaymentsList
+            .filter((p) => p.paymentMethod === 'efectivo')
+            .reduce((acc, p) => acc + toCents(p.amount || 0), 0)
+        );
+  const tabPaymentsCard =
+    report.shiftClose?.tabPaymentsCard !== undefined
+      ? report.shiftClose.tabPaymentsCard
+      : fromCents(
+          tabPaymentsList
+            .filter((p) => p.paymentMethod === 'datafono')
+            .reduce((acc, p) => acc + toCents(p.amount || 0), 0)
+        );
+  const totalTabPayments =
+    report.shiftClose?.totalTabPayments !== undefined
+      ? report.shiftClose.totalTabPayments
+      : fromCents(toCents(tabPaymentsCash) + toCents(tabPaymentsCard));
+
   const handlePrint = () => {
     toast.success('Abriendo diálogo de impresión / Guardar como PDF');
     setTimeout(() => {
@@ -289,7 +371,12 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
               size="sm"
               icon={<Download className="w-3.5 h-3.5" />}
               onClick={() => {
-                exportSalesHistoryToCSV(report.sales, report.voidAudits || [], report.periodLabel);
+                exportSalesHistoryToCSV(
+                  report.sales,
+                  report.voidAudits || [],
+                  report.periodLabel,
+                  report.tabPayments || []
+                );
                 toast.success('Reporte descargado en formato CSV / Excel');
               }}
             >
@@ -355,12 +442,12 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
             ))}
           </div>
 
-          {/* Separación Contable: Total Cafés vs Total Resto de Cafetería */}
+          {/* Separación Contable: Total Cafés vs Total Resto de Cafetería vs Abonos Recibidos */}
           <div className="mb-4 border border-[#E2DDD5] rounded-xl p-3 bg-[#FAF8F5]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#141210] mb-2">
               Separación Contable por Categoría
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#E2DDD5] bg-white">
                 <span className="flex items-center gap-2 text-xs font-semibold text-[#141210]">
                   <Coffee className="w-3.5 h-3.5 text-[#3D352F]" />
@@ -377,6 +464,15 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
                 </span>
                 <strong className="text-sm font-mono tabular-nums text-[#141210]">
                   {totalRestoCafeteria.toFixed(2)} €
+                </strong>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#E2DDD5] bg-white">
+                <span className="flex items-center gap-2 text-xs font-semibold text-[#141210]">
+                  <Banknote className="w-3.5 h-3.5 text-[#3D352F]" />
+                  Abonos Recibidos (Deudas previas)
+                </span>
+                <strong className="text-sm font-mono tabular-nums text-[#141210]">
+                  {totalTabPayments.toFixed(2)} €
                 </strong>
               </div>
             </div>
