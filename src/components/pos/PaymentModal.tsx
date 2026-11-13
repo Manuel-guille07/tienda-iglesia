@@ -43,6 +43,19 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
   const customer = customers.find((c) => c.id === customerId);
 
+  const availableCredit = customer
+    ? Number(
+        (
+          Math.max(0, Number(customer.balance || 0)) +
+          (Number(customer.debt || 0) < 0 ? Math.abs(Number(customer.debt || 0)) : 0)
+        ).toFixed(2)
+      )
+    : 0;
+  const prepaidUsedForSale =
+    method === 'fiado' && customer ? Number(Math.min(availableCredit, total).toFixed(2)) : 0;
+  const netTabDebtForSale =
+    method === 'fiado' ? Number(Math.max(0, total - prepaidUsedForSale).toFixed(2)) : undefined;
+
   // Estilos de Color Semántico Sutil Quiet Luxury por Método de Pago (10%-15% opacidad, alto contraste)
   const getMethodSemanticClasses = (id: PaymentMethod, active: boolean) => {
     switch (id) {
@@ -231,6 +244,8 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
         sellerRole: currentUser.role,
         notes: notes.trim() || undefined,
         donationSubMethod: method === 'donativo' ? donationSubMethod : undefined,
+        prepaidUsed: method === 'fiado' ? prepaidUsedForSale : undefined,
+        netTabDebt: method === 'fiado' ? netTabDebtForSale : undefined,
       });
 
       if (res.success && res.sale) {
@@ -407,7 +422,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
           {method === 'fiado' && (
             <div
-              className={`p-4 rounded-2xl border space-y-2 ${
+              className={`p-4 rounded-2xl border space-y-2.5 ${
                 isDark
                   ? 'bg-amber-500/15 border-amber-500/30 text-amber-100'
                   : 'bg-amber-500/12 border-amber-600/25 text-amber-950'
@@ -423,12 +438,37 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                     : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
                 }`}
               >
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.churchGroup}) · Saldo: {c.balance.toFixed(2)} €
-                  </option>
-                ))}
+                {customers.map((c) => {
+                  const custCredit =
+                    Math.max(0, Number(c.balance || 0)) +
+                    (Number(c.debt || 0) < 0 ? Math.abs(Number(c.debt || 0)) : 0);
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.churchGroup}) · Saldo: {custCredit.toFixed(2)} €
+                      {c.debt > 0 ? ` · Deuda: ${c.debt.toFixed(2)} €` : ''}
+                    </option>
+                  );
+                })}
               </select>
+
+              {customer && availableCredit > 0 && (
+                <div
+                  className={`p-3 rounded-xl border text-xs space-y-1 tabular-nums ${
+                    isDark
+                      ? 'bg-[#171412]/80 border-amber-500/30 text-amber-100'
+                      : 'bg-[#FAF8F5] border-amber-600/25 text-amber-950'
+                  }`}
+                >
+                  <div className="flex justify-between">
+                    <span>Cubierto con saldo a favor ({availableCredit.toFixed(2)} € disp.):</span>
+                    <strong className="font-mono">-{prepaidUsedForSale.toFixed(2)} €</strong>
+                  </div>
+                  <div className="flex justify-between font-semibold pt-1 border-t border-amber-500/20">
+                    <span>Nueva deuda generada en caja:</span>
+                    <strong className="font-mono">{(netTabDebtForSale ?? 0).toFixed(2)} €</strong>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

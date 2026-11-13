@@ -91,6 +91,8 @@ export interface Sale {
   sellerRole: Role;
   notes?: string;
   donationSubMethod?: 'efectivo' | 'datafono';
+  prepaidUsed?: number;
+  netTabDebt?: number;
 }
 
 export interface TabMovement {
@@ -154,6 +156,19 @@ export interface ShiftClose {
   totalCafes?: number;
   totalRestoCafeteria?: number;
   soldItemsSummary?: SoldItemSummary[];
+  totalFiadosGross?: number;
+  prepaidTabsUsed?: number;
+}
+
+export interface TabCreditRecord {
+  id: string;
+  saleId: string;
+  customerTabId?: string;
+  customerName?: string;
+  saleTotal: number;
+  prepaidUsed: number;
+  netTabDebt: number;
+  timestamp: string;
 }
 
 export type Language = 'es' | 'en';

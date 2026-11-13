@@ -160,7 +160,7 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
 }
 
 // 2. SALES
-// Esquema: total, payment_method, donation_sub_method, user_name, user_role
+// Esquema: total, payment_method, donation_sub_method, user_name, user_role (+ opcionales prepaid_used, net_tab_debt)
 export function toSaleSnake(item: Record<string, any>) {
   const payload: Record<string, any> = {
     total: Number(item.total ?? 0),
@@ -171,6 +171,16 @@ export function toSaleSnake(item: Record<string, any>) {
 
   if (item.donation_sub_method || item.donationSubMethod) {
     payload.donation_sub_method = item.donation_sub_method ?? item.donationSubMethod;
+  }
+
+  const prepaidVal = item.prepaid_used ?? item.prepaidUsed;
+  if (typeof prepaidVal === 'number' && !isNaN(prepaidVal)) {
+    payload.prepaid_used = Number(prepaidVal.toFixed(2));
+  }
+
+  const netDebtVal = item.net_tab_debt ?? item.netTabDebt;
+  if (typeof netDebtVal === 'number' && !isNaN(netDebtVal)) {
+    payload.net_tab_debt = Number(netDebtVal.toFixed(2));
   }
 
   const validId = cleanUUID(item.id);
@@ -188,6 +198,18 @@ export function fromSaleSnake(row: Record<string, any>) {
   const userName = row.user_name ?? row.seller_name ?? row.sellerName ?? 'Vendedor';
   const userRole = row.user_role ?? row.seller_role ?? row.sellerRole ?? 'Vendedor';
 
+  const rawPrepaid = row.prepaid_used ?? row.prepaidUsed;
+  const rawNetDebt = row.net_tab_debt ?? row.netTabDebt;
+
+  const prepaidUsed =
+    rawPrepaid !== null && rawPrepaid !== undefined && rawPrepaid !== '' && !isNaN(Number(rawPrepaid))
+      ? Number(rawPrepaid)
+      : undefined;
+  const netTabDebt =
+    rawNetDebt !== null && rawNetDebt !== undefined && rawNetDebt !== '' && !isNaN(Number(rawNetDebt))
+      ? Number(rawNetDebt)
+      : undefined;
+
   return {
     id: String(row.id),
     timestamp: row.created_at || row.timestamp || new Date().toISOString(),
@@ -202,6 +224,8 @@ export function fromSaleSnake(row: Record<string, any>) {
     user_role: userRole,
     notes: row.notes || '',
     items: [],
+    prepaidUsed,
+    netTabDebt,
   };
 }
 
@@ -540,11 +564,28 @@ export async function insertSale(sale: Record<string, any> | Record<string, any>
 
     const allHaveValidId = payload.length > 0 && payload.every((p) => Boolean(p.id));
 
-    const query = allHaveValidId
-      ? supabase.from('sales').upsert(payload, { onConflict: 'id' })
-      : supabase.from('sales').insert(payload);
+    const runQuery = (rows: Record<string, any>[]) =>
+      allHaveValidId
+        ? supabase.from('sales').upsert(rows, { onConflict: 'id' }).select()
+        : supabase.from('sales').insert(rows).select();
 
-    const { data, error } = await query.select();
+    let { data, error } = await runQuery(payload);
+
+    // Fallback seguro si prepaid_used / net_tab_debt no existen aún en la tabla sales remota
+    if (
+      error &&
+      error.message &&
+      (error.message.includes('prepaid_used') ||
+        error.message.includes('net_tab_debt') ||
+        error.message.includes('schema cache'))
+    ) {
+      const fallbackPayload = payload.map(
+        ({ prepaid_used: _pu, net_tab_debt: _nd, ...rest }) => rest
+      );
+      const retry = await runQuery(fallbackPayload);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.warn('[Supabase] insertSale warning:', error);
@@ -897,7 +938,7 @@ export function toAuditLogSnake(item: Record<string, any>) {
     action_type: actionType,
     user_name: userName,
     user_role: userRole,
-    sale_id: item.saleId || item.sale_id || details.saleId || null,
+    sale_id: cleanUUID(item.saleId || item.sale_id || details.saleId),
     voided_by: userName,
     voided_by_role: userRole,
     reason: item.reason || item.text || details.reason || details.text || '',

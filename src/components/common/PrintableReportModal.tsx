@@ -3,6 +3,7 @@ import { Sale, ShiftClose, SoldItemSummary, VoidAuditRecord } from '../../types'
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { useTheme } from '../../context/ThemeContext';
+import { calculateShiftTabBreakdown, useCloseoutStore } from '../../store/useCloseoutStore';
 import { Printer, Download, FileText, Coffee, ShoppingBag, PackageCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -154,9 +155,8 @@ export function exportSalesHistoryToCSV(
   const totalCard = sales
     .filter((s) => s.paymentMethod === 'datafono')
     .reduce((acc, s) => acc + (s.total || 0), 0);
-  const totalTabs = sales
-    .filter((s) => s.paymentMethod === 'fiado')
-    .reduce((acc, s) => acc + (s.total || 0), 0);
+  const { netFiados: totalTabs, prepaidUsed: totalPrepaidTabsUsed } =
+    calculateShiftTabBreakdown(sales, useCloseoutStore.getState().tabCredits);
   const totalDonations = sales
     .filter((s) => s.paymentMethod === 'donativo')
     .reduce((acc, s) => acc + (s.total || 0), 0);
@@ -175,7 +175,10 @@ export function exportSalesHistoryToCSV(
     ['Total Resto de Cafetería', totalRestoCafeteria.toFixed(2)],
     ['Total Efectivo', totalCash.toFixed(2)],
     ['Total Datáfono / Tarjeta', totalCard.toFixed(2)],
-    ['Total Fiados (Cuentas)', totalTabs.toFixed(2)],
+    ['Total Fiados (Deuda Neta Nueva)', totalTabs.toFixed(2)],
+    ...(totalPrepaidTabsUsed > 0
+      ? [['Saldo a Favor Consumido en Fiados', totalPrepaidTabsUsed.toFixed(2)]]
+      : []),
     ['Total Donativos', totalDonations.toFixed(2)],
     ['Número de Tickets', sales.length],
     [''],

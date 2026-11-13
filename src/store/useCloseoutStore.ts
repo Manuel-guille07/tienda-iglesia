@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Incident, ShiftClose, Role, Sale, VoidAuditRecord } from '../types';
+import { Incident, ShiftClose, Role, Sale, VoidAuditRecord, TabCreditRecord } from '../types';
 import { getCloseouts, insertCloseout, getAuditLogs, insertAuditLog, fromCloseoutSnake } from '../services/db';
 import toast from 'react-hot-toast';
 
@@ -11,16 +11,74 @@ export interface TabPaymentExport {
   description?: string;
 }
 
+/**
+ * Calcula la deuda neta real generada por ventas Fiadas ('fiado') en el turno,
+ * descontando cualquier saldo a favor / prepago del cliente que ya fue cobrado en un turno anterior.
+ */
+export function calculateShiftTabBreakdown(
+  shiftSales: Sale[],
+  tabCredits: TabCreditRecord[] = []
+): {
+  netFiados: number;
+  grossFiados: number;
+  prepaidUsed: number;
+} {
+  let netFiados = 0;
+  let grossFiados = 0;
+  let prepaidUsed = 0;
+
+  for (const s of shiftSales) {
+    if (s.paymentMethod !== 'fiado') continue;
+    const saleTotal = Number(s.total || 0);
+    grossFiados += saleTotal;
+
+    if (typeof s.netTabDebt === 'number' && !isNaN(s.netTabDebt)) {
+      const net = Math.max(0, Math.min(saleTotal, s.netTabDebt));
+      const used =
+        typeof s.prepaidUsed === 'number' && !isNaN(s.prepaidUsed)
+          ? Math.max(0, Math.min(saleTotal, s.prepaidUsed))
+          : Math.max(0, saleTotal - net);
+      netFiados += net;
+      prepaidUsed += used;
+      continue;
+    }
+
+    const creditRecord = tabCredits.find(
+      (tc) =>
+        (tc.saleId && tc.saleId === s.id) ||
+        (Math.abs(new Date(tc.timestamp).getTime() - new Date(s.timestamp).getTime()) < 5000 &&
+          Math.abs(tc.saleTotal - saleTotal) < 0.01)
+    );
+
+    if (creditRecord) {
+      const used = Math.max(0, Math.min(saleTotal, creditRecord.prepaidUsed));
+      const net = Math.max(0, saleTotal - used);
+      netFiados += net;
+      prepaidUsed += used;
+    } else {
+      netFiados += saleTotal;
+    }
+  }
+
+  return {
+    netFiados: Number(netFiados.toFixed(2)),
+    grossFiados: Number(grossFiados.toFixed(2)),
+    prepaidUsed: Number(prepaidUsed.toFixed(2)),
+  };
+}
+
 interface CloseoutState {
   incidents: Incident[];
   shiftCloses: ShiftClose[];
   voidAudits: VoidAuditRecord[];
+  tabCredits: TabCreditRecord[];
   lastCloseTimestamp: string | null;
   isSyncingSheets: boolean;
 
   loadCloseouts: () => Promise<void>;
   addIncident: (text: string, category: Incident['category'], author: string, role: Role) => Incident;
   addVoidAudit: (record: Omit<VoidAuditRecord, 'id'>) => VoidAuditRecord;
+  addTabCredit: (record: Omit<TabCreditRecord, 'id'>) => void;
   recordShiftClose: (closeData: Omit<ShiftClose, 'id' | 'timestamp' | 'exportStatus'>) => ShiftClose;
   handleRealtimeCloseout: (payload: any) => void;
   exportToGoogleSheets: (shiftCloseId: string) => Promise<{ success: boolean; message: string }>;
@@ -31,6 +89,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
   incidents: [],
   shiftCloses: [],
   voidAudits: [],
+  tabCredits: [],
   lastCloseTimestamp: null,
   isSyncingSheets: false,
 
@@ -82,6 +141,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
 
       const voidAudits: VoidAuditRecord[] = [];
       const incidents: Incident[] = [];
+      const tabCredits: TabCreditRecord[] = [];
 
       if (auditLogsData && auditLogsData.length > 0) {
         auditLogsData.forEach((log: any) => {
@@ -108,6 +168,23 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
               text: log.reason || details.text || '',
               category: log.category || details.category || 'caja',
             });
+          } else if (log.action_type === 'tab_credit') {
+            const details = log.details || {};
+            const prepaidUsed = Number(details.prepaidUsed ?? log.returnedAmount ?? 0);
+            const saleTotal = Number(details.saleTotal ?? 0);
+            const netTabDebt = Number(
+              details.netTabDebt ?? Math.max(0, saleTotal - prepaidUsed)
+            );
+            tabCredits.push({
+              id: log.id,
+              saleId: String(log.saleId || details.saleId || ''),
+              customerTabId: details.customerTabId,
+              customerName: details.customerName,
+              saleTotal,
+              prepaidUsed,
+              netTabDebt,
+              timestamp: details.timestamp || log.timestamp || log.created_at || new Date().toISOString(),
+            });
           }
         });
       }
@@ -126,6 +203,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
         lastCloseTimestamp: effectiveLatest,
         voidAudits,
         incidents,
+        tabCredits: tabCredits.length > 0 ? tabCredits : get().tabCredits,
       });
     } catch (error) {
       console.error('[useCloseoutStore] Error al cargar cierres y auditorías desde Supabase:', error);
@@ -183,6 +261,27 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
     });
 
     return newRecord;
+  },
+
+  addTabCredit: (record) => {
+    const newCredit: TabCreditRecord = {
+      ...record,
+      id: `tcred-${Date.now()}`,
+    };
+    set((state) => ({
+      tabCredits: [
+        newCredit,
+        ...state.tabCredits.filter(
+          (tc) =>
+            (!record.saleId || tc.saleId !== record.saleId) &&
+            !(
+              tc.saleId?.startsWith('sale-') &&
+              tc.timestamp === record.timestamp &&
+              Math.abs(tc.saleTotal - record.saleTotal) < 0.01
+            )
+        ),
+      ],
+    }));
   },
 
   recordShiftClose: (closeData) => {
@@ -328,7 +427,10 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
       ['Ventas por Datáfono / Tarjeta', (shiftClose.salesCard ?? (shiftClose.totalCard - (shiftClose.tabPaymentsCard || 0))).toFixed(2)],
       ['Abonos de Fiados por Datáfono', (shiftClose.tabPaymentsCard || 0).toFixed(2)],
       ['Total Datáfono / Tarjeta Esperado', shiftClose.totalCard.toFixed(2)],
-      ['Total Fiados Asignados (Nuevos a Cuenta)', shiftClose.totalFiados.toFixed(2)],
+      ['Total Fiados (Deuda Neta Nueva)', shiftClose.totalFiados.toFixed(2)],
+      ...(shiftClose.prepaidTabsUsed && shiftClose.prepaidTabsUsed > 0
+        ? [['Saldo a Favor Consumido en Fiados', shiftClose.prepaidTabsUsed.toFixed(2)]]
+        : []),
       ['Total Donativos Registrados', shiftClose.totalDonativos.toFixed(2)],
       ['Consumo Interno / Merma', shiftClose.totalConsumoInterno.toFixed(2)],
       ['Total Ingresos Reales del Turno', shiftClose.totalRevenue.toFixed(2)],

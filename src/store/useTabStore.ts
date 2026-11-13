@@ -31,7 +31,10 @@ interface TabState {
     description?: string,
     paymentMethod?: 'efectivo' | 'datafono'
   ) => void;
-  chargeSaleToTab: (customerId: string, sale: Sale) => { newBalance: number; newDebt: number };
+  chargeSaleToTab: (
+    customerId: string,
+    sale: Sale
+  ) => { newBalance: number; newDebt: number; prepaidUsed: number; netTabDebt: number };
 
   generateReceiptText: (customer: CustomerTab, sale?: Sale) => string;
   getWhatsAppShareUrl: (phone: string, text: string) => string;
@@ -222,30 +225,40 @@ export const useTabStore = create<TabState>((set, get) => ({
   chargeSaleToTab: (customerId, sale) => {
     let finalBalance = 0;
     let finalDebt = 0;
+    let prepaidUsed = 0;
+    let netTabDebt = sale.total;
 
     set({
       customers: get().customers.map((c) => {
         if (c.id !== customerId) return c;
-        let remBalance = c.balance;
-        let remDebt = c.debt;
+        let remBalance = Number(c.balance || 0);
+        let remDebt = Number(c.debt || 0);
 
-        if (remBalance >= sale.total) {
-          remBalance = Number((remBalance - sale.total).toFixed(2));
-        } else {
-          const diff = sale.total - remBalance;
-          remBalance = 0;
-          remDebt = Number((remDebt + diff).toFixed(2));
+        if (remDebt < 0) {
+          remBalance = Number((remBalance + Math.abs(remDebt)).toFixed(2));
+          remDebt = 0;
         }
+
+        prepaidUsed = Number(Math.min(Math.max(0, remBalance), sale.total).toFixed(2));
+        netTabDebt = Number(Math.max(0, sale.total - prepaidUsed).toFixed(2));
+
+        remBalance = Number(Math.max(0, remBalance - prepaidUsed).toFixed(2));
+        remDebt = Number((remDebt + netTabDebt).toFixed(2));
 
         finalBalance = remBalance;
         finalDebt = remDebt;
+
+        const breakdownSuffix =
+          prepaidUsed > 0
+            ? ` (Saldo previo: -${prepaidUsed.toFixed(2)}€, Deuda nueva: ${netTabDebt.toFixed(2)}€)`
+            : '';
 
         const mov: TabMovement = {
           id: `mov-${Date.now()}`,
           timestamp: sale.timestamp,
           type: 'deuda',
           amount: sale.total,
-          description: `Consumo: ${sale.items.map((i) => `${i.quantity}x ${i.product.name}`).join(', ')}`,
+          description: `Consumo: ${sale.items.map((i) => `${i.quantity}x ${i.product.name}`).join(', ')}${breakdownSuffix}`,
           saleId: sale.id,
         };
 
@@ -262,7 +275,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       console.error('Error al registrar cargo de fiado en Supabase:', err);
     });
 
-    return { newBalance: finalBalance, newDebt: finalDebt };
+    return { newBalance: finalBalance, newDebt: finalDebt, prepaidUsed, netTabDebt };
   },
 
   generateReceiptText: (customer, sale) => {

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
-import { useCloseoutStore } from '../../store/useCloseoutStore';
+import { useCloseoutStore, calculateShiftTabBreakdown } from '../../store/useCloseoutStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -43,6 +43,7 @@ export const CloseoutScreen: React.FC = () => {
     shiftCloses,
     lastCloseTimestamp,
     voidAudits,
+    tabCredits,
     addIncident,
     recordShiftClose,
     exportToGoogleSheets,
@@ -129,8 +130,13 @@ export const CloseoutScreen: React.FC = () => {
 
   const expectedCash = Number((salesCash + tabPaymentsCash).toFixed(2));
   const totalCard = Number((salesCard + tabPaymentsCard).toFixed(2));
-  const totalFiados = Number(
-    shiftSales.filter((s) => s.paymentMethod === 'fiado').reduce((a, s) => a + s.total, 0).toFixed(2)
+  const {
+    netFiados: totalFiados,
+    grossFiados: totalFiadosGross,
+    prepaidUsed: prepaidTabsUsed,
+  } = useMemo(
+    () => calculateShiftTabBreakdown(shiftSales, tabCredits),
+    [shiftSales, tabCredits]
   );
   const totalDonativos = Number(
     shiftSales.filter((s) => s.paymentMethod === 'donativo').reduce((a, s) => a + s.total, 0).toFixed(2)
@@ -154,6 +160,8 @@ export const CloseoutScreen: React.FC = () => {
     actualCash: counted,
     totalCard,
     totalFiados,
+    totalFiadosGross,
+    prepaidTabsUsed,
     totalDonativos,
     totalConsumoInterno: totalConsumo,
     totalCoffeesSold: totalCoffees,
@@ -203,6 +211,11 @@ export const CloseoutScreen: React.FC = () => {
     selectedHistoricalClose && selectedHistoricalIndex !== null
       ? getHistoricalCloseSales(selectedHistoricalClose, selectedHistoricalIndex)
       : [];
+  const historicalFiadosNet = selectedHistoricalClose
+    ? selectedHistoricalClose.totalFiados > 0
+      ? selectedHistoricalClose.totalFiados
+      : calculateShiftTabBreakdown(historicalSales, tabCredits).netFiados
+    : 0;
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
@@ -343,6 +356,11 @@ export const CloseoutScreen: React.FC = () => {
           <span className="text-2xl font-bold tabular-nums block mt-1.5">
             {totalFiados.toFixed(2)} €
           </span>
+          {prepaidTabsUsed > 0 && (
+            <span className={`text-xs block mt-1 truncate ${isDark ? 'text-amber-200/80' : 'text-amber-900'}`}>
+              Consumo: {totalFiadosGross.toFixed(2)} € · Saldo previo: -{prepaidTabsUsed.toFixed(2)} €
+            </span>
+          )}
         </div>
 
         <div
@@ -596,7 +614,7 @@ export const CloseoutScreen: React.FC = () => {
                 kpis: [
                   { label: 'Efectivo Esperado', value: `${selectedHistoricalClose.expectedCash.toFixed(2)}€` },
                   { label: 'Datáfono Total', value: `${selectedHistoricalClose.totalCard.toFixed(2)}€` },
-                  { label: 'Nuevos Fiados', value: `${selectedHistoricalClose.totalFiados.toFixed(2)}€` },
+                  { label: 'Nuevos Fiados', value: `${historicalFiadosNet.toFixed(2)}€` },
                   { label: 'Donativos', value: `${selectedHistoricalClose.totalDonativos.toFixed(2)}€` },
                 ],
                 sales: historicalSales,

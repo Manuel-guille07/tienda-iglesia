@@ -9,7 +9,9 @@ import {
   deleteSale,
   decrementStock,
   incrementStock,
+  insertAuditLog,
 } from '../services/db';
+import { useCloseoutStore } from './useCloseoutStore';
 import toast from 'react-hot-toast';
 
 export interface ProductStockInfo {
@@ -161,6 +163,8 @@ interface POSState {
     sellerRole: Role;
     notes?: string;
     donationSubMethod?: 'efectivo' | 'datafono';
+    prepaidUsed?: number;
+    netTabDebt?: number;
   }) => { success: boolean; sale?: Sale; error?: string };
 
   restockRawMaterial: (materialId: string, amount: number) => void;
@@ -470,7 +474,36 @@ export const usePOSStore = create<POSState>((set, get) => ({
       sellerRole: params.sellerRole,
       notes: params.notes,
       donationSubMethod: params.donationSubMethod,
+      prepaidUsed: params.prepaidUsed,
+      netTabDebt: params.netTabDebt,
     };
+
+    const cleanPrepaidUsed =
+      params.paymentMethod === 'fiado' &&
+      typeof params.prepaidUsed === 'number' &&
+      !isNaN(params.prepaidUsed) &&
+      params.prepaidUsed > 0
+        ? Number(params.prepaidUsed.toFixed(2))
+        : 0;
+
+    const cleanNetTabDebt =
+      params.paymentMethod === 'fiado'
+        ? typeof params.netTabDebt === 'number' && !isNaN(params.netTabDebt)
+          ? Number(params.netTabDebt.toFixed(2))
+          : Number(Math.max(0, total - cleanPrepaidUsed).toFixed(2))
+        : undefined;
+
+    if (params.paymentMethod === 'fiado' && cleanPrepaidUsed > 0) {
+      useCloseoutStore.getState().addTabCredit({
+        saleId: newSale.id,
+        customerTabId: params.customerTabId,
+        customerName: params.customerName,
+        saleTotal: total,
+        prepaidUsed: cleanPrepaidUsed,
+        netTabDebt: cleanNetTabDebt ?? 0,
+        timestamp: newSale.timestamp,
+      });
+    }
 
     set({
       rawMaterials: updatedRaw,
@@ -486,13 +519,48 @@ export const usePOSStore = create<POSState>((set, get) => ({
       donation_sub_method: params.donationSubMethod ?? null,
       user_name: params.sellerName,
       user_role: params.sellerRole,
+      prepaid_used: params.paymentMethod === 'fiado' ? cleanPrepaidUsed : undefined,
+      net_tab_debt: params.paymentMethod === 'fiado' ? cleanNetTabDebt : undefined,
     })
       .then(async (createdRows) => {
+        const finalSaleId = createdRows && createdRows[0]?.id ? String(createdRows[0].id) : newSale.id;
         if (createdRows && createdRows[0]?.id) {
-          const realId = createdRows[0].id;
           set((state) => ({
-            sales: state.sales.map((s) => (s.id === newSale.id ? { ...s, id: realId } : s)),
+            sales: state.sales.map((s) => (s.id === newSale.id ? { ...s, id: finalSaleId } : s)),
           }));
+        }
+
+        if (params.paymentMethod === 'fiado' && cleanPrepaidUsed > 0) {
+          useCloseoutStore.getState().addTabCredit({
+            saleId: finalSaleId,
+            customerTabId: params.customerTabId,
+            customerName: params.customerName,
+            saleTotal: total,
+            prepaidUsed: cleanPrepaidUsed,
+            netTabDebt: cleanNetTabDebt ?? 0,
+            timestamp: newSale.timestamp,
+          });
+
+          insertAuditLog({
+            action_type: 'tab_credit',
+            user_name: params.sellerName,
+            user_role: params.sellerRole,
+            saleId: finalSaleId,
+            returnedAmount: cleanPrepaidUsed,
+            paymentMethod: 'fiado',
+            reason: 'Saldo a favor aplicado en venta fiada',
+            details: {
+              saleId: finalSaleId,
+              customerTabId: params.customerTabId,
+              customerName: params.customerName,
+              saleTotal: total,
+              prepaidUsed: cleanPrepaidUsed,
+              netTabDebt: cleanNetTabDebt ?? 0,
+              timestamp: newSale.timestamp,
+            },
+          }).catch((auditErr) => {
+            console.warn('[usePOSStore] Error al registrar tab_credit en audit_logs:', auditErr);
+          });
         }
 
         if (itemsToDecrement.length > 0) {
