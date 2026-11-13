@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { Boxes, Plus, Coffee, Edit, Trash2, CheckCircle, EyeOff, Zap, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
 import { Modal } from '../ui/Modal';
 import { AddRawMaterialModal } from './AddRawMaterialModal';
 import { RecipeEditorModal } from './RecipeEditorModal';
@@ -12,6 +12,9 @@ import toast from 'react-hot-toast';
 
 export const InventoryScreen: React.FC = () => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const {
     rawMaterials,
     products,
@@ -29,7 +32,6 @@ export const InventoryScreen: React.FC = () => {
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
   const [editingRecipeProduct, setEditingRecipeProduct] = useState<Product | null>(null);
 
-  // State for recipe & material deletion modals and idempotency lock
   const [confirmDeleteRecipeProd, setConfirmDeleteRecipeProd] = useState<Product | null>(null);
   const [confirmDeleteMaterial, setConfirmDeleteMaterial] = useState<RawMaterial | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,32 +111,55 @@ export const InventoryScreen: React.FC = () => {
 
   const recipeProducts = products.filter((p) => p.recipe && p.recipe.length > 0);
 
+  const primaryText = isDark ? 'text-[#F4F0EA]' : 'text-[#141210]';
+  const secondaryText = isDark ? 'text-[#9A9086]' : 'text-[#3D352F]';
+  const cardSurface = isDark
+    ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+    : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]';
+  const stoneSurface = isDark
+    ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA]'
+    : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]';
+  const darkStoneTag = isDark
+    ? 'bg-[#2A2420] text-[#F4F0EA] border-[#3D352F]'
+    : 'bg-[#E2DDD5] text-[#141210] border-[#D6CFC5]';
+  const borderSubtle = isDark ? 'border-[#2A2420]' : 'border-[#E2DDD5]';
+
+  const activeTabClass = isDark
+    ? 'bg-[#EFECE6] text-[#141210] shadow-sm'
+    : 'bg-[#141210] text-[#FAF8F5] shadow-sm';
+
+  const inactiveTabClass = isDark
+    ? 'bg-[#211D1A] text-[#F4F0EA] hover:bg-[#2A2420]'
+    : 'bg-[#EFECE6] text-[#141210] hover:bg-[#E2DDD5]';
+
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
+    <div className={`p-4 sm:p-6 max-w-7xl mx-auto space-y-5 ${primaryText}`}>
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Boxes className="w-5 h-5 text-indigo-400" />
+          <h2 className="text-xl font-bold flex items-center gap-2 tracking-tight">
+            <Boxes className="w-5 h-5" />
             {t('inventory.title')}
           </h2>
-          <p className="text-xs text-slate-400">{t('inventory.subtitle')}</p>
+          <p className={`text-xs mt-0.5 ${secondaryText}`}>{t('inventory.subtitle')}</p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-xl">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
+          <div className={`flex items-center gap-1 border p-1 rounded-full ${cardSurface}`}>
             <button
+              type="button"
               onClick={() => setTab('raw')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                tab === 'raw' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
+                tab === 'raw' ? activeTabClass : inactiveTabClass
               }`}
             >
               Insumos & Catálogo
             </button>
             <button
+              type="button"
               onClick={() => setTab('recipes')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                tab === 'recipes' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
+                tab === 'recipes' ? activeTabClass : inactiveTabClass
               }`}
             >
               Recetas ({recipeProducts.length})
@@ -151,7 +176,7 @@ export const InventoryScreen: React.FC = () => {
                 setIsAddMaterialOpen(true);
               }}
             >
-              + Añadir Producto / Insumo
+              Añadir Producto / Insumo
             </Button>
           ) : (
             <Button
@@ -163,7 +188,7 @@ export const InventoryScreen: React.FC = () => {
                 setIsRecipeOpen(true);
               }}
             >
-              + Crear Receta
+              Crear Receta
             </Button>
           )}
         </div>
@@ -171,13 +196,15 @@ export const InventoryScreen: React.FC = () => {
 
       {tab === 'raw' ? (
         rawMaterials.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
-            <Boxes className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="font-semibold text-white">No hay insumos ni productos registrados en Supabase</p>
-            <p className="text-xs text-slate-400 mt-1">Añade tu primer insumo o producto con el botón superior.</p>
+          <div className={`border rounded-3xl p-8 text-center ${cardSurface}`}>
+            <Boxes className={`w-10 h-10 mx-auto mb-2 ${secondaryText}`} />
+            <p className="font-semibold">No hay insumos ni productos registrados en Supabase</p>
+            <p className={`text-xs mt-1 ${secondaryText}`}>
+              Añade tu primer insumo o producto con el botón superior.
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             {rawMaterials.map((m) => {
               const isLow = m.currentStock <= m.minStock;
               const isSellable = m.isSellable !== false;
@@ -185,73 +212,96 @@ export const InventoryScreen: React.FC = () => {
               return (
                 <div
                   key={m.id}
-                  className={`bg-slate-900 border rounded-2xl p-4 flex flex-col justify-between transition ${
-                    m.isOutOfStock ? 'border-rose-500/50 bg-rose-950/10' : 'border-slate-800'
+                  className={`border rounded-3xl p-4 flex flex-col justify-between transition ${cardSurface} ${
+                    m.isOutOfStock ? 'border-rose-600/50' : ''
                   }`}
                 >
                   <div>
-                    <div className="flex justify-between items-start gap-1">
-                      <div>
-                        <h3 className="font-bold text-sm text-white leading-snug">{m.name}</h3>
-                        <span className="text-[10px] text-indigo-400 font-semibold uppercase tracking-wider block mt-0.5">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm leading-snug truncate">{m.name}</h3>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider block mt-0.5 ${secondaryText}`}>
                           {getCategoryLabel(m.category)}
                         </span>
                       </div>
+
                       {m.isOutOfStock ? (
-                        <span className="text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full shrink-0">
+                        <span className="text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-600/30 px-2.5 py-0.5 rounded-full shrink-0">
                           Agotado
                         </span>
+                      ) : isLow ? (
+                        <span className="text-[10px] font-bold bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-600/30 px-2.5 py-0.5 rounded-full shrink-0">
+                          Bajo
+                        </span>
                       ) : (
-                        <Badge variant={isLow ? 'warning' : 'success'} size="sm">
-                          {isLow ? 'Bajo' : 'OK'}
-                        </Badge>
+                        <span className={`text-[10px] font-bold border px-2.5 py-0.5 rounded-full shrink-0 ${darkStoneTag}`}>
+                          OK
+                        </span>
                       )}
                     </div>
 
-                    <div className="my-2 flex items-baseline justify-between">
-                      <div>
-                        <span className="text-3xl font-black text-white">{m.currentStock}</span>
-                        <span className="text-xs text-slate-400 ml-1">{m.unit}</span>
+                    {/* Stock & Price Tags (Quiet Luxury High-Contrast Stone #E2DDD5 / Transparent) */}
+                    <div className="my-3 flex items-baseline justify-between gap-2">
+                      <div className="flex items-baseline gap-1">
+                        <span className={`text-3xl font-black tabular-nums ${primaryText}`}>
+                          {m.currentStock}
+                        </span>
+                        <span className={`text-xs font-medium ${secondaryText}`}>{m.unit}</span>
                       </div>
+
                       {isSellable && typeof m.price === 'number' && (
-                        <span className="text-sm font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-800/60 px-2 py-0.5 rounded-lg">
-                          {m.price.toFixed(2)}€
+                        <span
+                          className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-xl ${
+                            isDark
+                              ? 'bg-[#2A2420] text-[#F4F0EA]'
+                              : 'bg-[#E2DDD5] text-[#141210]'
+                          }`}
+                        >
+                          {m.price.toFixed(2)} €
                         </span>
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                       {isSellable ? (
-                        <span className="bg-cyan-950/60 text-cyan-300 border border-cyan-800/60 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3 text-cyan-400" /> POS Visible
+                        <span className={`border px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold ${stoneSurface}`}>
+                          <CheckCircle className="w-3 h-3" /> POS Visible
                         </span>
                       ) : (
-                        <span className="bg-slate-850 text-slate-400 border border-slate-750 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <EyeOff className="w-3 h-3 text-slate-500" /> Insumo Interno
+                        <span className={`border px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium ${stoneSurface} ${secondaryText}`}>
+                          <EyeOff className="w-3 h-3" /> Insumo Interno
                         </span>
                       )}
                       {m.isQuickAccess && (
-                        <span className="bg-amber-950/60 text-amber-300 border border-amber-800/60 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-amber-400" /> Botonera
+                        <span className={`border px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold ${darkStoneTag}`}>
+                          <Zap className="w-3 h-3" /> Botonera
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800 text-xs">
-                      <span className="text-[11px] text-slate-400">Estado:</span>
+                    <div className={`flex items-center justify-between mt-3 pt-2.5 border-t text-xs ${borderSubtle}`}>
+                      <span className={`text-[11px] font-medium ${secondaryText}`}>Estado:</span>
                       <button
                         type="button"
                         onClick={() => {
                           toggleRawMaterialAvailability(m.id);
                           toast.success(m.isOutOfStock ? `${m.name}: Disponible` : `${m.name}: Agotado`);
                         }}
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
                           m.isOutOfStock
-                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-600/30'
+                            : stoneSurface
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${m.isOutOfStock ? 'bg-rose-500' : 'bg-emerald-400'}`} />
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            m.isOutOfStock
+                              ? 'bg-rose-600'
+                              : isDark
+                              ? 'bg-[#EFECE6]'
+                              : 'bg-[#141210]'
+                          }`}
+                        />
                         {m.isOutOfStock ? 'Agotado' : 'Disponible'}
                       </button>
                     </div>
@@ -263,25 +313,38 @@ export const InventoryScreen: React.FC = () => {
                       size="sm"
                       className="w-full font-semibold text-xs"
                       icon={<Plus className="w-3.5 h-3.5" />}
-                      onClick={() => { setSelectedId(m.id); setAmount(m.unit === 'ml' ? 1000 : 20); }}
+                      onClick={() => {
+                        setSelectedId(m.id);
+                        setAmount(m.unit === 'ml' ? 1000 : 20);
+                      }}
                     >
                       {t('inventory.addStock')}
                     </Button>
 
                     <div className="flex items-center gap-1.5 pt-1">
                       <button
+                        type="button"
                         onClick={() => {
                           setEditingMaterial(m);
                           setIsAddMaterialOpen(true);
                         }}
-                        className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        className={`flex-1 py-2 text-xs font-semibold rounded-full border transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isDark
+                            ? 'bg-[#211D1A] hover:bg-[#2A2420] border-[#2A2420] text-[#F4F0EA]'
+                            : 'bg-[#EFECE6] hover:bg-[#E2DDD5] border-[#E2DDD5] text-[#141210]'
+                        }`}
                       >
-                        <Edit className="w-3.5 h-3.5 text-indigo-400" />
+                        <Edit className="w-3.5 h-3.5" />
                         <span>Editar</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => setConfirmDeleteMaterial(m)}
-                        className="p-1.5 bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
+                        className={`p-2 rounded-full border transition-colors cursor-pointer ${
+                          isDark
+                            ? 'bg-[#211D1A] border-[#2A2420] text-[#9A9086] hover:text-rose-400 hover:border-rose-700/50'
+                            : 'bg-[#EFECE6] border-[#E2DDD5] text-[#3D352F] hover:text-rose-700 hover:border-rose-400'
+                        }`}
                         title="Eliminar insumo / producto"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -293,70 +356,87 @@ export const InventoryScreen: React.FC = () => {
             })}
           </div>
         )
+      ) : recipeProducts.length === 0 ? (
+        <div className={`border rounded-3xl p-8 text-center ${cardSurface}`}>
+          <Coffee className={`w-10 h-10 mx-auto mb-2 ${secondaryText}`} />
+          <p className="font-semibold">No hay recetas configuradas</p>
+          <p className={`text-xs mt-1 ${secondaryText}`}>
+            Crea tu primera receta de café o bebida con ingredientes múltiples.
+          </p>
+        </div>
       ) : (
-        recipeProducts.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-400">
-            <Coffee className="w-10 h-10 mx-auto text-amber-500/60 mb-2" />
-            <p className="font-semibold text-white">No hay recetas configuradas</p>
-            <p className="text-xs text-slate-400 mt-1">Crea tu primera receta de café o bebida con ingredientes múltiples.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {recipeProducts.map((prod) => (
-              <div key={prod.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 flex flex-col justify-between hover:border-slate-700 transition">
-                <div>
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                    <span className="font-bold text-sm text-white flex items-center gap-1.5">
-                      <Coffee className="w-4 h-4 text-amber-400" />
-                      {prod.name}
-                    </span>
-                    <span className="font-bold text-emerald-400">{prod.price.toFixed(2)}€</span>
-                  </div>
-                  <div className="space-y-1.5 mt-3">
-                    <span className="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">
-                      Ingredientes ({prod.recipe?.length || 0}):
-                    </span>
-                    {prod.recipe?.map((item) => {
-                      const r = rawMaterials.find((rm) => rm.id === item.rawMaterialId);
-                      return (
-                        <div key={item.rawMaterialId} className="flex justify-between text-xs bg-slate-800/80 p-2 rounded-lg border border-slate-750">
-                          <span className="text-slate-200 flex items-center gap-1 font-medium">
-                            {r?.isOutOfStock && <span className="text-[10px] text-rose-400 font-bold">[Agotado]</span>}
-                            {r?.name || item.rawMaterialId}
-                          </span>
-                          <strong className="text-indigo-300 font-mono">{item.quantity} {r?.unit || 'uds'}</strong>
-                        </div>
-                      );
-                    })}
-                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {recipeProducts.map((prod) => (
+            <div
+              key={prod.id}
+              className={`border rounded-3xl p-4 space-y-3 flex flex-col justify-between transition ${cardSurface}`}
+            >
+              <div>
+                <div className={`flex justify-between items-center border-b pb-2.5 ${borderSubtle}`}>
+                  <span className="font-bold text-sm flex items-center gap-1.5">
+                    <Coffee className="w-4 h-4" />
+                    {prod.name}
+                  </span>
+                  <span
+                    className={`text-sm font-bold tabular-nums px-2.5 py-0.5 rounded-xl ${
+                      isDark ? 'bg-[#2A2420] text-[#F4F0EA]' : 'bg-[#E2DDD5] text-[#141210]'
+                    }`}
+                  >
+                    {prod.price.toFixed(2)} €
+                  </span>
                 </div>
-
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    icon={<Edit className="w-3.5 h-3.5" />}
-                    onClick={() => {
-                      setEditingRecipeProduct(prod);
-                      setIsRecipeOpen(true);
-                    }}
-                  >
-                    Editar Receta
-                  </Button>
-                  <button
-                    onClick={() => setConfirmDeleteRecipeProd(prod)}
-                    className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 hover:text-rose-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
-                    title="Eliminar Receta"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Eliminar</span>
-                  </button>
+                <div className="space-y-1.5 mt-3">
+                  <span className={`text-[11px] font-semibold block uppercase tracking-wider ${secondaryText}`}>
+                    Ingredientes ({prod.recipe?.length || 0}):
+                  </span>
+                  {prod.recipe?.map((item) => {
+                    const r = rawMaterials.find((rm) => rm.id === item.rawMaterialId);
+                    return (
+                      <div
+                        key={item.rawMaterialId}
+                        className={`flex justify-between text-xs p-2.5 rounded-2xl border ${stoneSurface}`}
+                      >
+                        <span className="flex items-center gap-1 font-medium">
+                          {r?.isOutOfStock && (
+                            <span className="text-[10px] text-rose-600 font-bold">[Agotado]</span>
+                          )}
+                          {r?.name || item.rawMaterialId}
+                        </span>
+                        <strong className="font-mono font-bold tabular-nums">
+                          {item.quantity} {r?.unit || 'uds'}
+                        </strong>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
-        )
+
+              <div className={`flex items-center gap-2 pt-2.5 border-t ${borderSubtle}`}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex-1 text-xs"
+                  icon={<Edit className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    setEditingRecipeProduct(prod);
+                    setIsRecipeOpen(true);
+                  }}
+                >
+                  Editar Receta
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteRecipeProd(prod)}
+                  className="px-3.5 py-2.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-600/30 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-full flex items-center gap-1.5 cursor-pointer transition-colors"
+                  title="Eliminar Receta"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Eliminar</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Reponer Stock Modal */}
@@ -376,10 +456,14 @@ export const InventoryScreen: React.FC = () => {
               const parsed = parseFloat(e.target.value);
               setAmount(Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0);
             }}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-lg font-bold text-white focus:outline-none focus:border-indigo-500 tabular-nums"
+            className={`w-full border rounded-2xl p-3 text-lg font-bold focus:outline-none tabular-nums ${
+              isDark
+                ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] focus:border-[#EFECE6]'
+                : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] focus:border-[#141210]'
+            }`}
           />
           <Button
-            variant="success"
+            variant="primary"
             size="lg"
             disabled={isSubmitting || !Number.isFinite(amount) || amount <= 0}
             isLoading={isSubmitting}
@@ -398,14 +482,14 @@ export const InventoryScreen: React.FC = () => {
           onClose={() => !isSubmitting && setConfirmDeleteMaterial(null)}
           title="Eliminar Insumo / Producto"
         >
-          <div className="space-y-4 text-slate-200">
-            <div className="flex items-start gap-3 bg-rose-950/30 border border-rose-800/50 p-3.5 rounded-xl">
-              <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 bg-rose-500/10 border border-rose-600/30 p-3.5 rounded-2xl">
+              <AlertTriangle className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-white">
+                <p className="text-sm font-semibold">
                   ¿Estás seguro de eliminar "{confirmDeleteMaterial.name}" de Supabase e inventario?
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className={`text-xs mt-1 ${secondaryText}`}>
                   Esta acción eliminará permanentemente el registro de la tabla de inventario.
                 </p>
               </div>
@@ -413,7 +497,7 @@ export const InventoryScreen: React.FC = () => {
 
             <div className="flex gap-2 pt-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 disabled={isSubmitting}
                 className="flex-1"
                 onClick={() => setConfirmDeleteMaterial(null)}
@@ -442,14 +526,14 @@ export const InventoryScreen: React.FC = () => {
           onClose={() => !isSubmitting && setConfirmDeleteRecipeProd(null)}
           title="Eliminar Receta"
         >
-          <div className="space-y-4 text-slate-200">
-            <div className="flex items-start gap-3 bg-rose-950/30 border border-rose-800/50 p-3.5 rounded-xl">
-              <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 bg-rose-500/10 border border-rose-600/30 p-3.5 rounded-2xl">
+              <AlertTriangle className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-white">
+                <p className="text-sm font-semibold">
                   ¿Estás seguro de eliminar la receta de "{confirmDeleteRecipeProd.name}"?
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className={`text-xs mt-1 ${secondaryText}`}>
                   El producto permanecerá en el catálogo general pero dejará de consumir ingredientes de materia prima al venderse.
                 </p>
               </div>
@@ -457,7 +541,7 @@ export const InventoryScreen: React.FC = () => {
 
             <div className="flex gap-2 pt-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 disabled={isSubmitting}
                 className="flex-1"
                 onClick={() => setConfirmDeleteRecipeProd(null)}

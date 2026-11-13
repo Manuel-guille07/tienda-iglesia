@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
+import { useTheme } from '../../context/ThemeContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Product, RecipeItem } from '../../types';
@@ -14,6 +15,9 @@ interface Props {
 
 export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product }) => {
   const { products, rawMaterials, updateProductRecipe, deleteProductRecipe } = usePOSStore();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const [selectedId, setSelectedId] = useState('');
   const [items, setItems] = useState<RecipeItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,6 +84,13 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
   };
 
   const currentProd = products.find((p) => p.id === selectedId);
+  const secondaryText = isDark ? 'text-[#9A9086]' : 'text-[#3D352F]';
+  const stoneSurface = isDark
+    ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA]'
+    : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]';
+  const inputSurface = isDark
+    ? 'bg-[#0E0C0B] border-[#2A2420] text-[#F4F0EA]'
+    : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]';
 
   return (
     <Modal
@@ -90,7 +101,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
       <div className="space-y-4">
         {!product && (
           <div>
-            <label className="text-xs text-slate-300 block mb-1">Producto</label>
+            <label className={`text-xs font-semibold block mb-1 ${secondaryText}`}>Producto</label>
             <select
               value={selectedId}
               onChange={(e) => {
@@ -99,7 +110,7 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                 const p = products.find((x) => x.id === e.target.value);
                 setItems(p?.recipe ? [...p.recipe] : []);
               }}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-white"
+              className={`w-full border rounded-2xl p-2.5 text-xs font-medium ${stoneSurface}`}
             >
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -111,18 +122,30 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
         )}
 
         {currentProd && (
-          <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
-            <span className="font-semibold text-white flex items-center gap-1.5">
-              <Coffee className="w-4 h-4 text-amber-400" /> {currentProd.name}
+          <div className={`p-3 rounded-2xl border flex justify-between items-center text-xs ${stoneSurface}`}>
+            <span className="font-semibold flex items-center gap-1.5">
+              <Coffee className="w-4 h-4" /> {currentProd.name}
             </span>
-            <span className="font-bold text-emerald-400">{currentProd.price.toFixed(2)}€</span>
+            <span
+              className={`font-bold tabular-nums px-2 py-0.5 rounded-lg ${
+                isDark ? 'bg-[#2A2420] text-[#F4F0EA]' : 'bg-[#E2DDD5] text-[#141210]'
+              }`}
+            >
+              {currentProd.price.toFixed(2)} €
+            </span>
           </div>
         )}
 
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <label className="text-xs font-semibold text-slate-300">Ingredientes de la Receta:</label>
-            <button type="button" onClick={handleAddItem} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer font-medium">
+            <label className={`text-xs font-semibold ${secondaryText}`}>
+              Ingredientes de la Receta:
+            </label>
+            <button
+              type="button"
+              onClick={handleAddItem}
+              className={`text-xs px-3 py-1 rounded-full font-semibold flex items-center gap-1 cursor-pointer border transition ${stoneSurface}`}
+            >
               <Plus className="w-3.5 h-3.5" /> Añadir Insumo
             </button>
           </div>
@@ -131,7 +154,10 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
             {items.map((item, idx) => {
               const mat = rawMaterials.find((m) => m.id === item.rawMaterialId);
               return (
-                <div key={idx} className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl p-2">
+                <div
+                  key={idx}
+                  className={`flex items-center gap-2 border rounded-2xl p-2 ${stoneSurface}`}
+                >
                   <select
                     value={item.rawMaterialId}
                     onChange={(e) => {
@@ -139,10 +165,12 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                       u[idx].rawMaterialId = e.target.value;
                       setItems(u);
                     }}
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-white"
+                    className={`flex-1 border rounded-xl p-1.5 text-xs ${inputSurface}`}
                   >
                     {rawMaterials.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.unit})
+                      </option>
                     ))}
                   </select>
 
@@ -159,15 +187,17 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
                         u[idx].quantity = Number.isFinite(parsed) && !isNaN(parsed) ? Math.max(0, parsed) : 0;
                         setItems(u);
                       }}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white text-center font-bold tabular-nums"
+                      className={`w-16 border rounded-lg p-1 text-xs text-center font-bold tabular-nums ${inputSurface}`}
                     />
-                    <span className="text-[10px] text-slate-400 truncate">{mat?.unit || 'uds'}</span>
+                    <span className={`text-[10px] truncate ${secondaryText}`}>
+                      {mat?.unit || 'uds'}
+                    </span>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setItems(items.filter((_, i) => i !== idx))}
-                    className="p-1 text-slate-400 hover:text-rose-400 cursor-pointer"
+                    className={`p-1 hover:text-rose-600 cursor-pointer ${secondaryText}`}
                     title="Quitar de receta"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -178,23 +208,27 @@ export const RecipeEditorModal: React.FC<Props> = ({ isOpen, onClose, product })
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+        <div
+          className={`flex items-center gap-2 pt-3 border-t ${
+            isDark ? 'border-[#2A2420]' : 'border-[#E2DDD5]'
+          }`}
+        >
           {currentProd?.recipe && (
             <button
               type="button"
               disabled={isSubmitting}
               onClick={handleDeleteRecipe}
-              className="px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+              className="px-3.5 py-2.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-600/30 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-full flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>{confirmDelete ? '¿Confirmar?' : 'Eliminar Receta'}</span>
             </button>
           )}
-          <Button variant="outline" disabled={isSubmitting} className="flex-1" onClick={onClose}>
+          <Button variant="secondary" disabled={isSubmitting} className="flex-1" onClick={onClose}>
             Cancelar
           </Button>
           <Button
-            variant="success"
+            variant="primary"
             disabled={isSubmitting}
             isLoading={isSubmitting}
             className="flex-1 font-bold"

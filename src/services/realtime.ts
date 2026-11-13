@@ -39,11 +39,12 @@ export function setupRealtimeSync(callbacks: RealtimeCallbacks) {
         if (!callbacks.onRawMaterialChange) return;
 
         if (payload.eventType === 'DELETE') {
-          const id = payload.old ? String(payload.old.id) : '';
+          const id = payload.old?.id ? String(payload.old.id) : '';
           callbacks.onRawMaterialChange({ id } as RawMaterial, 'DELETE');
         } else if (payload.new) {
           const mapped = fromRawMaterialSnake(payload.new);
-          callbacks.onRawMaterialChange(mapped, payload.eventType as 'INSERT' | 'UPDATE');
+          const ev = (payload.eventType === 'INSERT' ? 'INSERT' : 'UPDATE') as 'INSERT' | 'UPDATE';
+          callbacks.onRawMaterialChange(mapped, ev);
         }
       }
     )

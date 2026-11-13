@@ -89,10 +89,13 @@ export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts:
 
   return rawMaterials.map((mat, idx) => {
     const existing = savedProducts.find((p) => p.id === mat.id || p.name.toLowerCase() === mat.name.toLowerCase());
-    const basePrice = mat.price !== undefined && mat.price !== null
-      ? mat.price
+    const hasExplicitPrice = typeof mat.price === 'number' && !isNaN(mat.price);
+    const basePrice = hasExplicitPrice
+      ? (mat.price as number)
       : (mat.costPerUnit > 0 ? Number((mat.costPerUnit * 2).toFixed(2)) : 1.20);
-    const finalPrice = existing?.price !== undefined ? existing.price : (mat.price !== undefined ? mat.price : Math.max(1.00, basePrice));
+    const finalPrice = hasExplicitPrice
+      ? (mat.price as number)
+      : (existing?.price !== undefined ? existing.price : Math.max(1.00, basePrice));
 
     const isSellable = mat.isSellable !== undefined
       ? mat.isSellable
@@ -202,7 +205,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
         category: item.category || 'cafeteria',
         isSellable: item.isSellable ?? item.is_sellable ?? true,
         isQuickAccess: item.isQuickAccess ?? item.is_quick_access ?? false,
-        price: typeof item.price === 'number' ? item.price : undefined,
+        price:
+          item.price !== null && item.price !== undefined && item.price !== '' && !isNaN(Number(item.price))
+            ? Number(item.price)
+            : undefined,
         quickColor: item.quickColor ?? item.quick_color ?? 'default',
         quick_color: item.quick_color ?? item.quickColor ?? 'default',
       }));
@@ -235,7 +241,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
         category: item.category || 'cafeteria',
         isSellable: item.isSellable ?? item.is_sellable ?? true,
         isQuickAccess: item.isQuickAccess ?? item.is_quick_access ?? false,
-        price: typeof item.price === 'number' ? item.price : undefined,
+        price:
+          item.price !== null && item.price !== undefined && item.price !== '' && !isNaN(Number(item.price))
+            ? Number(item.price)
+            : undefined,
         quickColor: item.quickColor ?? item.quick_color ?? 'default',
         quick_color: item.quick_color ?? item.quickColor ?? 'default',
       }));
@@ -582,10 +591,18 @@ export const usePOSStore = create<POSState>((set, get) => ({
       .then((saved) => {
         if (saved && saved.length > 0) {
           const savedItem = saved[0];
+          const realId = String(savedItem.id);
           set((state) => {
-            const rawWithRealId = state.rawMaterials.map((m) =>
-              m.id === tempId ? { ...m, id: String(savedItem.id) } : m
+            const withoutDuplicates = state.rawMaterials.filter(
+              (m) => m.id !== realId || m.id === tempId
             );
+            const hasTemp = withoutDuplicates.some((m) => m.id === tempId);
+            const rawWithRealId = hasTemp
+              ? withoutDuplicates.map((m) =>
+                  m.id === tempId ? { ...m, ...savedItem, id: realId } : m
+                )
+              : [...withoutDuplicates, { ...savedItem, id: realId }];
+
             return {
               rawMaterials: rawWithRealId,
               products: buildDynamicProducts(rawWithRealId, state.products),
@@ -662,10 +679,25 @@ export const usePOSStore = create<POSState>((set, get) => ({
     });
 
     if (updatedItem) {
-      insertRawMaterial(updatedItem).catch((error: any) => {
-        console.error('Error al sincronizar actualización de insumo en Supabase:', error);
-        toast.error(error?.message || 'Error al actualizar el producto en Supabase');
-      });
+      insertRawMaterial(updatedItem)
+        .then((saved) => {
+          if (saved && saved.length > 0) {
+            const savedItem = saved[0];
+            set((state) => {
+              const syncedRaw = state.rawMaterials.map((m) =>
+                m.id === materialId || m.id === savedItem.id ? { ...m, ...savedItem } : m
+              );
+              return {
+                rawMaterials: syncedRaw,
+                products: buildDynamicProducts(syncedRaw, state.products),
+              };
+            });
+          }
+        })
+        .catch((error: any) => {
+          console.error('Error al sincronizar actualización de insumo en Supabase:', error);
+          toast.error(error?.message || 'Error al actualizar el producto en Supabase');
+        });
     }
   },
 
@@ -786,12 +818,29 @@ export const usePOSStore = create<POSState>((set, get) => ({
     let updated: RawMaterial[];
 
     if (eventType === 'DELETE') {
+      if (!material.id) {
+        get().loadRawMaterials();
+        return;
+      }
       updated = rawMaterials.filter((m) => m.id !== material.id);
     } else if (eventType === 'INSERT') {
-      if (rawMaterials.some((m) => m.id === material.id)) return;
-      updated = [material, ...rawMaterials];
+      if (rawMaterials.some((m) => m.id === material.id)) {
+        updated = rawMaterials.map((m) => (m.id === material.id ? { ...m, ...material } : m));
+      } else {
+        const tempMatchIdx = rawMaterials.findIndex(
+          (m) => m.id.startsWith('raw-') && m.name.trim().toLowerCase() === material.name.trim().toLowerCase()
+        );
+        if (tempMatchIdx > -1) {
+          updated = rawMaterials.map((m, idx) => (idx === tempMatchIdx ? { ...m, ...material } : m));
+        } else {
+          updated = [material, ...rawMaterials];
+        }
+      }
     } else {
-      updated = rawMaterials.map((m) => (m.id === material.id ? { ...m, ...material } : m));
+      const exists = rawMaterials.some((m) => m.id === material.id);
+      updated = exists
+        ? rawMaterials.map((m) => (m.id === material.id ? { ...m, ...material } : m))
+        : [material, ...rawMaterials];
     }
 
     const updatedProducts = buildDynamicProducts(updated, products);

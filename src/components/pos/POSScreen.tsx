@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ProductCatalog } from './ProductCatalog';
 import { QuickCafeteriaKeypad } from './QuickCafeteriaKeypad';
 import { CartPanel } from './CartPanel';
@@ -11,9 +11,13 @@ export const POSScreen: React.FC = () => {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'quick' | 'catalog'>('quick');
-  const { cart } = usePOSStore();
+  const { cart, loadRawMaterials } = usePOSStore();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    loadRawMaterials();
+  }, [loadRawMaterials]);
 
   const totalCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const totalAmount = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);

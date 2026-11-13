@@ -79,7 +79,11 @@ export function toRawMaterialSnake(item: Record<string, any>) {
   const isQuickAccess = typeof item.is_quick_access === 'boolean'
     ? item.is_quick_access
     : (typeof item.isQuickAccess === 'boolean' ? item.isQuickAccess : (item.isPreset ?? false));
-  const priceVal = typeof item.price === 'number' ? item.price : null;
+  const parsedPrice =
+    item.price !== null && item.price !== undefined && item.price !== '' && !isNaN(Number(item.price))
+      ? Number(item.price)
+      : null;
+  const priceVal = parsedPrice;
   const quickColorVal = sanitizeQuickColor(item.quick_color ?? item.quickColor);
 
   const payload: Record<string, any> = {
@@ -124,6 +128,11 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
 
   const quickColor = sanitizeQuickColor(row.quick_color ?? row.quickColor) as any;
 
+  const parsedRowPrice =
+    row.price !== null && row.price !== undefined && row.price !== '' && !isNaN(Number(row.price))
+      ? Number(row.price)
+      : undefined;
+
   return {
     id: String(row.id),
     name: row.name,
@@ -137,7 +146,7 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
     is_sellable: isSellable,
     isQuickAccess,
     is_quick_access: isQuickAccess,
-    price: typeof row.price === 'number' ? row.price : undefined,
+    price: parsedRowPrice,
     quickColor,
     quick_color: quickColor,
     // Compatibilidad bidireccional

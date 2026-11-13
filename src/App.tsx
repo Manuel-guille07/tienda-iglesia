@@ -37,9 +37,9 @@ const UsersManagementScreen = lazy(() =>
 );
 
 const RouteLoadingFallback: React.FC = () => (
-  <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3 text-slate-400">
-    <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-    <span className="text-xs font-medium">Cargando vista...</span>
+  <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+    <div className="w-8 h-8 border-2 border-current border-t-transparent rounded-full animate-spin opacity-80" />
+    <span className="text-xs font-medium opacity-75">Cargando vista...</span>
   </div>
 );
 
