@@ -160,14 +160,101 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
 }
 
 // 2. SALES
-// Esquema: total, payment_method, donation_sub_method, user_name, user_role (+ opcionales prepaid_used, net_tab_debt)
+// Esquema: total, payment_method, donation_sub_method, user_name, user_role (+ items JSONB / audit_logs snapshot)
+const SALE_ITEMS_CACHE_KEY = 'el_chiringuito_sale_items_v1';
+
+interface CachedSaleSnapshot {
+  items: any[];
+  customerName?: string;
+  customerTabId?: string;
+  prepaidUsed?: number;
+  netTabDebt?: number;
+  notes?: string;
+}
+
+function loadCachedSaleSnapshots(): Record<string, CachedSaleSnapshot> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(SALE_ITEMS_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveCachedSaleSnapshot(saleId: string, snapshot: CachedSaleSnapshot) {
+  if (typeof window === 'undefined' || !saleId) return;
+  try {
+    const current = loadCachedSaleSnapshots();
+    current[saleId] = snapshot;
+    window.localStorage.setItem(SALE_ITEMS_CACHE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+export function normalizeSaleItems(rawItems: any): any[] {
+  if (!rawItems) return [];
+  let parsed = rawItems;
+  if (typeof rawItems === 'string') {
+    try {
+      parsed = JSON.parse(rawItems);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed
+    .map((it: any) => {
+      if (!it) return null;
+      const quantity = Math.max(1, Number(it.quantity ?? it.qty ?? 1));
+      const name = String(it.name ?? it.product?.name ?? 'Producto').trim();
+      const price = Number(it.price ?? it.customPrice ?? it.product?.price ?? 0);
+      const category = String(it.category ?? it.product?.category ?? 'cafeteria');
+      const id = String(it.id ?? it.product?.id ?? name.toLowerCase());
+      const subtotal = Number((it.subtotal ?? price * quantity).toFixed(2));
+
+      return {
+        id,
+        name,
+        quantity,
+        price,
+        category,
+        subtotal,
+        notes: it.notes,
+        customPrice: it.customPrice,
+        product: {
+          ...(it.product || {}),
+          id,
+          name,
+          price,
+          category,
+        },
+      };
+    })
+    .filter(Boolean);
+}
+
 export function toSaleSnake(item: Record<string, any>) {
+  const normalizedItems = normalizeSaleItems(item.items);
   const payload: Record<string, any> = {
     total: Number(item.total ?? 0),
     payment_method: item.payment_method ?? item.paymentMethod ?? 'efectivo',
     user_name: item.user_name ?? item.seller_name ?? item.sellerName ?? 'Vendedor',
     user_role: item.user_role ?? item.seller_role ?? item.sellerRole ?? 'Vendedor',
   };
+
+  if (normalizedItems.length > 0) {
+    payload.items = normalizedItems.map((it) => ({
+      id: it.id,
+      name: it.name,
+      quantity: it.quantity,
+      price: it.price,
+      category: it.category,
+      subtotal: it.subtotal,
+    }));
+  }
 
   if (item.donation_sub_method || item.donationSubMethod) {
     payload.donation_sub_method = item.donation_sub_method ?? item.donationSubMethod;
@@ -191,15 +278,27 @@ export function toSaleSnake(item: Record<string, any>) {
   return payload;
 }
 
-export function fromSaleSnake(row: Record<string, any>) {
+export function fromSaleSnake(
+  row: Record<string, any>,
+  snapshotMap?: Map<string, CachedSaleSnapshot>
+) {
+  const idStr = String(row.id);
   const total = Number(row.total ?? 0);
   const paymentMethod = row.payment_method ?? row.paymentMethod ?? 'efectivo';
   const donationSubMethod = row.donation_sub_method ?? row.donationSubMethod ?? null;
   const userName = row.user_name ?? row.seller_name ?? row.sellerName ?? 'Vendedor';
   const userRole = row.user_role ?? row.seller_role ?? row.sellerRole ?? 'Vendedor';
 
-  const rawPrepaid = row.prepaid_used ?? row.prepaidUsed;
-  const rawNetDebt = row.net_tab_debt ?? row.netTabDebt;
+  const dbSnapshot = snapshotMap?.get(idStr);
+  const localSnapshots = loadCachedSaleSnapshots();
+  const cachedSnap = dbSnapshot || localSnapshots[idStr];
+
+  const rowItems = normalizeSaleItems(row.items ?? row.sale_items);
+  const hydratedItems =
+    rowItems.length > 0 ? rowItems : normalizeSaleItems(cachedSnap?.items);
+
+  const rawPrepaid = row.prepaid_used ?? row.prepaidUsed ?? cachedSnap?.prepaidUsed;
+  const rawNetDebt = row.net_tab_debt ?? row.netTabDebt ?? cachedSnap?.netTabDebt;
 
   const prepaidUsed =
     rawPrepaid !== null && rawPrepaid !== undefined && rawPrepaid !== '' && !isNaN(Number(rawPrepaid))
@@ -211,7 +310,7 @@ export function fromSaleSnake(row: Record<string, any>) {
       : undefined;
 
   return {
-    id: String(row.id),
+    id: idStr,
     timestamp: row.created_at || row.timestamp || new Date().toISOString(),
     total,
     paymentMethod,
@@ -222,8 +321,10 @@ export function fromSaleSnake(row: Record<string, any>) {
     sellerRole: userRole,
     user_name: userName,
     user_role: userRole,
-    notes: row.notes || '',
-    items: [],
+    customerName: row.customer_name ?? row.customerName ?? cachedSnap?.customerName,
+    customerTabId: row.customer_tab_id ?? row.customerTabId ?? cachedSnap?.customerTabId,
+    notes: row.notes || cachedSnap?.notes || '',
+    items: hydratedItems,
     prepaidUsed,
     netTabDebt,
   };
@@ -562,22 +663,76 @@ export async function deleteRawMaterial(materialId: string): Promise<boolean> {
 }
 
 // --- SALES ---
-export async function getSales() {
+async function fetchSaleSnapshotsMap(): Promise<Map<string, CachedSaleSnapshot>> {
+  const map = new Map<string, CachedSaleSnapshot>();
   try {
     const { data, error } = await supabase
+      .from('audit_logs')
+      .select('sale_id, reason, returned_items')
+      .eq('action_type', 'sale_snapshot');
+
+    if (!error && Array.isArray(data)) {
+      for (const row of data) {
+        if (!row.sale_id) continue;
+        let meta: Record<string, any> = {};
+        if (typeof row.reason === 'string' && row.reason.trim().startsWith('{')) {
+          try {
+            meta = JSON.parse(row.reason);
+          } catch {
+            meta = {};
+          }
+        }
+        const items = normalizeSaleItems(row.returned_items);
+        const snap: CachedSaleSnapshot = {
+          items,
+          customerName: meta.customerName,
+          customerTabId: meta.customerTabId,
+          prepaidUsed: meta.prepaidUsed,
+          netTabDebt: meta.netTabDebt,
+          notes: meta.notes,
+        };
+        map.set(String(row.sale_id), snap);
+        saveCachedSaleSnapshot(String(row.sale_id), snap);
+      }
+    }
+  } catch {
+    // fallback silently to local cache if offline
+  }
+  return map;
+}
+
+export async function getSales(sinceTimestamp?: string | null) {
+  try {
+    let query = supabase
       .from('sales')
       .select('*')
       .order('created_at', { ascending: false });
+
+    const hasValidSince =
+      Boolean(sinceTimestamp) && !isNaN(new Date(sinceTimestamp as string).getTime());
+
+    if (hasValidSince) {
+      query = query.gt('created_at', sinceTimestamp as string);
+    }
+
+    const [{ data, error }, snapshotMap] = await Promise.all([
+      query,
+      fetchSaleSnapshotsMap(),
+    ]);
 
     if (error) {
       console.warn('[Supabase] getSales warning:', error);
       return [];
     }
-    return (data || []).map(fromSaleSnake);
+    return (data || []).map((row: any) => fromSaleSnake(row, snapshotMap));
   } catch (err) {
     console.warn('[Supabase] getSales catch:', err);
     return [];
   }
+}
+
+export async function getShiftSales(lastCloseTimestamp?: string | null) {
+  return getSales(lastCloseTimestamp);
 }
 
 export async function insertSale(sale: Record<string, any> | Record<string, any>[]) {
@@ -594,16 +749,17 @@ export async function insertSale(sale: Record<string, any> | Record<string, any>
 
     let { data, error } = await runQuery(payload);
 
-    // Fallback seguro si prepaid_used / net_tab_debt no existen aún en la tabla sales remota
+    // Fallback seguro si items / prepaid_used / net_tab_debt no existen aún como columnas directas en sales
     if (
       error &&
       error.message &&
-      (error.message.includes('prepaid_used') ||
+      (error.message.includes('items') ||
+        error.message.includes('prepaid_used') ||
         error.message.includes('net_tab_debt') ||
         error.message.includes('schema cache'))
     ) {
       const fallbackPayload = payload.map(
-        ({ prepaid_used: _pu, net_tab_debt: _nd, ...rest }) => rest
+        ({ items: _it, prepaid_used: _pu, net_tab_debt: _nd, ...rest }) => rest
       );
       const retry = await runQuery(fallbackPayload);
       data = retry.data;
@@ -614,7 +770,67 @@ export async function insertSale(sale: Record<string, any> | Record<string, any>
       console.warn('[Supabase] insertSale warning:', error);
       throw error;
     }
-    return (data || []).map(fromSaleSnake);
+
+    const insertedRows = data || [];
+    const snapshotMap = new Map<string, CachedSaleSnapshot>();
+
+    // Persistir la foto estática de los productos en audit_logs (returned_items JSONB) y caché local
+    await Promise.all(
+      insertedRows.map(async (row: any, idx: number) => {
+        const sourceItem = items[idx] || items[0] || {};
+        const normalizedItems = normalizeSaleItems(sourceItem.items);
+        const saleId = String(row.id);
+
+        const snap: CachedSaleSnapshot = {
+          items: normalizedItems,
+          customerName: sourceItem.customerName ?? sourceItem.customer_name,
+          customerTabId: sourceItem.customerTabId ?? sourceItem.customer_tab_id,
+          prepaidUsed: sourceItem.prepaid_used ?? sourceItem.prepaidUsed,
+          netTabDebt: sourceItem.net_tab_debt ?? sourceItem.netTabDebt,
+          notes: sourceItem.notes,
+        };
+
+        snapshotMap.set(saleId, snap);
+        saveCachedSaleSnapshot(saleId, snap);
+
+        const validSaleUuid = cleanUUID(saleId);
+        if (validSaleUuid && normalizedItems.length > 0) {
+          const snapshotItemsPayload = normalizedItems.map((it) => ({
+            id: it.id,
+            name: it.name,
+            quantity: it.quantity,
+            price: it.price,
+            category: it.category,
+            subtotal: it.subtotal,
+          }));
+          try {
+            await supabase.from('audit_logs').insert([
+              {
+                action_type: 'sale_snapshot',
+                sale_id: validSaleUuid,
+                performed_by:
+                  sourceItem.user_name ??
+                  sourceItem.sellerName ??
+                  row.user_name ??
+                  'Vendedor',
+                reason: JSON.stringify({
+                  customerName: snap.customerName,
+                  customerTabId: snap.customerTabId,
+                  prepaidUsed: snap.prepaidUsed,
+                  netTabDebt: snap.netTabDebt,
+                  notes: snap.notes,
+                }),
+                returned_items: snapshotItemsPayload,
+              },
+            ]);
+          } catch (snapErr) {
+            console.warn('[Supabase] sale_snapshot insert warning:', snapErr);
+          }
+        }
+      })
+    );
+
+    return insertedRows.map((row: any) => fromSaleSnake(row, snapshotMap));
   } catch (err) {
     console.warn('[Supabase] insertSale catch:', err);
     throw err;
@@ -1067,32 +1283,54 @@ export async function upsertProfile(profile: Record<string, any>) {
   }
 }
 
-// --- AUDIT LOGS (Anulaciones e Incidencias en Supabase) ---
+// --- AUDIT LOGS (Anulaciones, Incidencias y Snapshots en Supabase) ---
+// Esquema real en producción: id, action_type, sale_id, reason, returned_items (jsonb), performed_by, created_at
 export function toAuditLogSnake(item: Record<string, any>) {
   const details = typeof item.details === 'object' && item.details !== null ? item.details : {};
   const actionType = item.action_type || item.actionType || 'void';
-  const userName = item.user_name || item.userName || item.voidedBy || item.author || details.voidedBy || 'Usuario';
-  const userRole = item.user_role || item.userRole || item.voidedByRole || item.role || details.voidedByRole || 'Vendedor';
+  const userName =
+    item.performed_by ||
+    item.user_name ||
+    item.userName ||
+    item.voidedBy ||
+    item.author ||
+    details.voidedBy ||
+    'Usuario';
+  const userRole =
+    item.user_role ||
+    item.userRole ||
+    item.voidedByRole ||
+    item.role ||
+    details.voidedByRole ||
+    'Vendedor';
+
+  const rawReason = item.reason || item.text || details.reason || details.text || '';
+  const returnedAmount = Number(
+    item.returnedAmount ?? item.returned_amount ?? item.amount ?? details.returnedAmount ?? 0
+  );
+  const paymentMethod =
+    item.paymentMethod || item.payment_method || details.paymentMethod || 'efectivo';
+  const category =
+    item.category || details.category || (actionType === 'incident' ? 'incidencia' : 'anulacion');
+
+  const encodedMeta = JSON.stringify({
+    text: rawReason,
+    userName,
+    userRole,
+    returnedAmount,
+    paymentMethod,
+    category,
+    ...details,
+  });
 
   const payload: Record<string, any> = {
     action_type: actionType,
-    user_name: userName,
-    user_role: userRole,
     sale_id: cleanUUID(item.saleId || item.sale_id || details.saleId),
-    voided_by: userName,
-    voided_by_role: userRole,
-    reason: item.reason || item.text || details.reason || details.text || '',
-    returned_amount: Number(item.returnedAmount ?? item.returned_amount ?? item.amount ?? details.returnedAmount ?? 0),
-    payment_method: item.paymentMethod || item.payment_method || details.paymentMethod || 'efectivo',
+    performed_by: userName,
+    reason: actionType === 'sale_snapshot' ? rawReason : encodedMeta,
     returned_items: item.returnedItems || item.returned_items || details.returnedItems || [],
-    category: item.category || details.category || (actionType === 'incident' ? 'incidencia' : 'anulacion'),
-    details: {
-      actionType,
-      userName,
-      userRole,
-      ...details,
-    },
   };
+
   const validId = cleanUUID(item.id);
   if (validId) {
     payload.id = validId;
@@ -1101,13 +1339,51 @@ export function toAuditLogSnake(item: Record<string, any>) {
 }
 
 export function fromAuditLogSnake(row: Record<string, any>) {
-  const details = typeof row.details === 'string'
-    ? JSON.parse(row.details)
-    : (typeof row.details === 'object' && row.details !== null ? row.details : {});
+  let parsedReasonMeta: Record<string, any> = {};
+  if (typeof row.reason === 'string' && row.reason.trim().startsWith('{')) {
+    try {
+      parsedReasonMeta = JSON.parse(row.reason);
+    } catch {
+      parsedReasonMeta = {};
+    }
+  }
 
-  const actionType = row.action_type || row.actionType || details.actionType || (row.sale_id || row.returned_amount ? 'void' : 'incident');
-  const userName = row.user_name || row.voided_by || details.userName || details.voidedBy || details.author || 'Usuario';
-  const userRole = row.user_role || row.voided_by_role || details.userRole || details.voidedByRole || details.role || 'Vendedor';
+  const rawDetails =
+    typeof row.details === 'string'
+      ? JSON.parse(row.details)
+      : typeof row.details === 'object' && row.details !== null
+      ? row.details
+      : {};
+
+  const details = { ...parsedReasonMeta, ...rawDetails };
+
+  const actionType =
+    row.action_type ||
+    row.actionType ||
+    details.actionType ||
+    (row.sale_id || row.returned_amount ? 'void' : 'incident');
+  const userName =
+    row.performed_by ||
+    row.user_name ||
+    row.voided_by ||
+    details.userName ||
+    details.voidedBy ||
+    details.author ||
+    'Usuario';
+  const userRole =
+    row.user_role ||
+    row.voided_by_role ||
+    details.userRole ||
+    details.voidedByRole ||
+    details.role ||
+    'Vendedor';
+
+  const plainReason =
+    typeof parsedReasonMeta.text === 'string'
+      ? parsedReasonMeta.text
+      : typeof details.reason === 'string'
+      ? details.reason
+      : row.reason || '';
 
   return {
     id: String(row.id),
@@ -1120,7 +1396,7 @@ export function fromAuditLogSnake(row: Record<string, any>) {
     voidedBy: userName,
     voidedByRole: userRole,
     timestamp: row.created_at || row.timestamp || details.timestamp || new Date().toISOString(),
-    reason: row.reason || details.reason || details.text || '',
+    reason: plainReason,
     returnedAmount: Number(row.returned_amount ?? details.returnedAmount ?? 0),
     paymentMethod: row.payment_method || details.paymentMethod || 'efectivo',
     returnedItems: row.returned_items || details.returnedItems || [],
@@ -1133,6 +1409,7 @@ export async function getAuditLogs() {
     const { data, error } = await supabase
       .from('audit_logs')
       .select('*')
+      .neq('action_type', 'sale_snapshot')
       .order('created_at', { ascending: false });
     if (error) {
       console.warn('[Supabase] getAuditLogs warning:', error.message);

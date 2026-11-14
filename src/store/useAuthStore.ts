@@ -2,6 +2,19 @@ import { create } from 'zustand';
 import { User, Role } from '../types';
 import { supabase } from '../lib/supabase';
 import { getProfiles, upsertProfile, cleanUUID, generateUUID, sanitizeAvatarIcon } from '../services/db';
+import { usePOSStore } from './usePOSStore';
+import { useCloseoutStore } from './useCloseoutStore';
+import { useTabStore } from './useTabStore';
+
+function hydrateShiftTruthFromSupabase() {
+  Promise.all([
+    usePOSStore.getState().loadInitialData(),
+    useCloseoutStore.getState().loadCloseouts(),
+    useTabStore.getState().loadTabs(),
+  ]).catch((err) => {
+    console.warn('[useAuthStore] Error al hidratar métricas de turno desde Supabase:', err);
+  });
+}
 
 export function getUserInternalEmail(user: User): string {
   if (user.email) return user.email;
@@ -116,6 +129,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
+      if (get().currentUser) {
+        hydrateShiftTruthFromSupabase();
+      }
+
       // 4. Configurar listener de cambios de estado de Supabase Auth
       supabase.auth.onAuthStateChange(async (event: any, session: any) => {
         if (event === 'SIGNED_IN' && session?.user) {
@@ -168,6 +185,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isLoading: false,
     });
 
+    hydrateShiftTruthFromSupabase();
+
     return { success: true };
   },
 
@@ -191,6 +210,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginAs: (user: User) => {
     sessionStorage.setItem('elarx_active_user_id', user.id);
     set({ currentUser: user, isAuthenticated: true });
+    hydrateShiftTruthFromSupabase();
   },
 
   saveUserProfile: async (userData) => {

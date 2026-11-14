@@ -51,6 +51,9 @@ export const CloseoutScreen: React.FC = () => {
     tabCredits,
     tabPayments: allStoreTabPayments,
     shiftTabPayments: storeShiftTabPayments,
+    shiftSales: storeShiftSales,
+    loadCloseouts,
+    loadShiftSales,
     loadShiftTabPayments,
     addIncident,
     recordShiftClose,
@@ -74,9 +77,14 @@ export const CloseoutScreen: React.FC = () => {
   );
 
   useEffect(() => {
+    loadCloseouts();
+  }, [loadCloseouts]);
+
+  useEffect(() => {
     const sinceIso = latestCloseMs > 0 ? new Date(latestCloseMs).toISOString() : null;
     loadShiftTabPayments(sinceIso);
-  }, [latestCloseMs, loadShiftTabPayments]);
+    loadShiftSales(sinceIso);
+  }, [latestCloseMs, loadShiftTabPayments, loadShiftSales]);
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -91,11 +99,28 @@ export const CloseoutScreen: React.FC = () => {
     return d.getTime() >= startOfDay.getTime();
   };
 
-  const shiftSales = useMemo(
-    () => sales.filter((s) => isAfterLastCloseout(s.timestamp)),
+  const shiftSales = useMemo(() => {
+    const map = new Map<string, (typeof sales)[number]>();
+    for (const s of storeShiftSales) {
+      if (isAfterLastCloseout(s.timestamp)) {
+        map.set(s.id, s);
+      }
+    }
+    for (const s of sales) {
+      if (isAfterLastCloseout(s.timestamp)) {
+        const existing = map.get(s.id);
+        if (!existing) {
+          map.set(s.id, s);
+        } else if ((!existing.items || existing.items.length === 0) && s.items?.length) {
+          map.set(s.id, { ...existing, items: s.items });
+        }
+      }
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sales, latestCloseMs]
-  );
+  }, [sales, storeShiftSales, latestCloseMs]);
 
   const shiftTabPayments = useMemo(() => {
     const localTabPayments: TabPaymentExport[] = customers.flatMap((c) =>

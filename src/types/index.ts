@@ -69,6 +69,11 @@ export interface Product {
 }
 
 export interface CartItem {
+  id?: string;
+  name?: string;
+  price?: number;
+  category?: Category;
+  subtotal?: number;
   product: Product;
   quantity: number;
   notes?: string;

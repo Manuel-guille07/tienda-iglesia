@@ -147,7 +147,7 @@ interface POSState {
 
   loadInitialData: () => Promise<void>;
   loadRawMaterials: () => Promise<void>;
-  loadSales: () => Promise<void>;
+  loadSales: (sinceTimestamp?: string | null) => Promise<Sale[]>;
   setSearchQuery: (query: string) => void;
   setSelectedCategory: (category: string) => void;
 
@@ -276,12 +276,48 @@ export const usePOSStore = create<POSState>((set, get) => ({
     }
   },
 
-  loadSales: async () => {
+  loadSales: async (sinceTimestamp?: string | null) => {
     try {
-      const salesRows = await getSales();
-      set({ sales: salesRows || [] });
+      const salesRows = await getSales(sinceTimestamp);
+      const fetched = (salesRows || []) as Sale[];
+      if (sinceTimestamp) {
+        set((state) => {
+          const map = new Map<string, Sale>();
+          for (const s of fetched) {
+            map.set(s.id, s);
+          }
+          for (const existing of state.sales) {
+            if (!map.has(existing.id)) {
+              map.set(existing.id, existing);
+            } else {
+              const curr = map.get(existing.id)!;
+              if ((!curr.items || curr.items.length === 0) && existing.items?.length) {
+                map.set(existing.id, { ...curr, items: existing.items });
+              }
+            }
+          }
+          const merged = Array.from(map.values()).sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          return { sales: merged };
+        });
+      } else {
+        set((state) => {
+          const existingById = new Map(state.sales.map((s) => [s.id, s]));
+          const hydrated = fetched.map((s) => {
+            const prev = existingById.get(s.id);
+            if ((!s.items || s.items.length === 0) && prev?.items?.length) {
+              return { ...s, items: prev.items };
+            }
+            return s;
+          });
+          return { sales: hydrated };
+        });
+      }
+      return fetched;
     } catch (error) {
       console.error('[usePOSStore] Error al cargar ventas desde Supabase:', error);
+      return get().sales;
     }
   },
 
@@ -466,13 +502,22 @@ export const usePOSStore = create<POSState>((set, get) => ({
         }
 
         const safeUnitPrice = roundMoney(rawUnitPrice);
+        const cleanQty = Math.floor(item.quantity);
+        const resolvedProduct = {
+          ...(canonicalProduct || item.product),
+          price: safeUnitPrice,
+        };
+        const lineSubtotal = fromCents(toCents(safeUnitPrice) * cleanQty);
+
         sanitizedCart.push({
           ...item,
-          quantity: Math.floor(item.quantity),
-          product: {
-            ...(canonicalProduct || item.product),
-            price: safeUnitPrice,
-          },
+          id: resolvedProduct.id,
+          name: resolvedProduct.name,
+          price: safeUnitPrice,
+          category: resolvedProduct.category || 'cafeteria',
+          subtotal: lineSubtotal,
+          quantity: cleanQty,
+          product: resolvedProduct,
           customPrice: item.customPrice !== undefined ? safeUnitPrice : undefined,
         });
       }
@@ -579,6 +624,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
         donation_sub_method: params.donationSubMethod ?? null,
         user_name: params.sellerName,
         user_role: params.sellerRole,
+        items: sanitizedCart,
+        customerName: params.customerName,
+        customerTabId: params.customerTabId,
+        notes: params.notes,
         prepaid_used: params.paymentMethod === 'fiado' ? cleanPrepaidUsed : undefined,
         net_tab_debt: params.paymentMethod === 'fiado' ? cleanNetTabDebt : undefined,
       });
@@ -689,12 +738,39 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
     try {
       const donativoProduct = get().products.find((p) => p.category === 'donativos');
+      const donationItems: CartItem[] = [
+        {
+          id: donativoProduct?.id || 'prod-donativo-cambio',
+          name: donativoProduct?.name || 'Donativo (Cambio de compra)',
+          price: cleanAmount,
+          category: 'donativos',
+          subtotal: cleanAmount,
+          quantity: 1,
+          product: donativoProduct
+            ? { ...donativoProduct, price: cleanAmount }
+            : {
+                id: 'prod-donativo-cambio',
+                name: 'Donativo (Cambio de compra)',
+                price: cleanAmount,
+                category: 'donativos',
+                description: 'Cambio voluntario convertido en donativo para la obra',
+              },
+        },
+      ];
+      const donationNotes = params.notes?.trim()
+        ? `Donativo por cambio de compra: ${params.notes.trim()}`
+        : params.relatedSaleId
+        ? `Donativo por cambio de compra (Venta #${params.relatedSaleId.slice(-6)})`
+        : 'Donativo por cambio de compra';
+
       const createdRows = await insertSale({
         total: cleanAmount,
         payment_method: 'donativo',
         donation_sub_method: params.donationSubMethod || 'efectivo',
         user_name: params.sellerName,
         user_role: params.sellerRole,
+        items: donationItems,
+        notes: donationNotes,
       });
 
       const created = createdRows?.[0];
@@ -705,20 +781,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       const donationSale: Sale = {
         id: String(created.id),
         timestamp: created.timestamp || new Date().toISOString(),
-        items: [
-          {
-            product: donativoProduct
-              ? { ...donativoProduct, price: cleanAmount }
-              : {
-                  id: 'prod-donativo-cambio',
-                  name: 'Donativo (Cambio de compra)',
-                  price: cleanAmount,
-                  category: 'donativos',
-                  description: 'Cambio voluntario convertido en donativo para la obra',
-                },
-            quantity: 1,
-          },
-        ],
+        items: donationItems,
         total: cleanAmount,
         paymentMethod: 'donativo',
         donationSubMethod: params.donationSubMethod || 'efectivo',
@@ -726,11 +789,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
         changeGiven: 0,
         sellerName: params.sellerName,
         sellerRole: params.sellerRole,
-        notes: params.notes?.trim()
-          ? `Donativo por cambio de compra: ${params.notes.trim()}`
-          : params.relatedSaleId
-          ? `Donativo por cambio de compra (Venta #${params.relatedSaleId.slice(-6)})`
-          : 'Donativo por cambio de compra',
+        notes: donationNotes,
       };
 
       set((state) => ({
@@ -1128,6 +1187,11 @@ export const usePOSStore = create<POSState>((set, get) => ({
         return;
       }
       set({ sales: [sale as Sale, ...sales] });
+      if (!sale.items || sale.items.length === 0) {
+        setTimeout(() => {
+          get().loadSales().catch(() => {});
+        }, 400);
+      }
     } else if (eventType === 'UPDATE' && sale.id) {
       set({
         sales: sales.map((s) =>

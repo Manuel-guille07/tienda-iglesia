@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useCloseoutStore } from '../../store/useCloseoutStore';
@@ -39,9 +39,14 @@ export const SalesHistoryScreen: React.FC = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { sales, voidSale } = usePOSStore();
+  const { sales, voidSale, loadSales } = usePOSStore();
   const { currentUser } = useAuthStore();
-  const { voidAudits, addVoidAudit } = useCloseoutStore();
+  const { voidAudits, addVoidAudit, loadCloseouts } = useCloseoutStore();
+
+  useEffect(() => {
+    loadSales();
+    loadCloseouts();
+  }, [loadSales, loadCloseouts]);
 
   const [activeTab, setActiveTab] = useState<'tickets' | 'audits'>('tickets');
   const [dateFilter, setDateFilter] = useState<'today' | 'all'>('today');
@@ -121,7 +126,7 @@ export const SalesHistoryScreen: React.FC = () => {
 
     try {
       const returnedItems = (selectedSaleToVoid.items || []).map((it) => ({
-        name: it.product?.name || 'Producto',
+        name: it.name || it.product?.name || 'Producto',
         quantity: it.quantity,
       }));
 
@@ -613,14 +618,21 @@ export const SalesHistoryScreen: React.FC = () => {
 
                       {sale.items && sale.items.length > 0 && (
                         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                          {sale.items.map((item, idx) => (
-                            <span
-                              key={idx}
-                              className={`text-[10px] border px-2 py-0.5 rounded-lg font-medium ${innerSurface} ${primaryText}`}
-                            >
-                              {item.quantity}x {item.product?.name}
-                            </span>
-                          ))}
+                          {sale.items.map((item, idx) => {
+                            const itemName = item.name || item.product?.name || 'Producto';
+                            const unitPrice = Number(
+                              item.price ?? item.customPrice ?? item.product?.price ?? 0
+                            );
+                            const subtotal = Number(item.subtotal ?? unitPrice * item.quantity);
+                            return (
+                              <span
+                                key={idx}
+                                className={`text-[10px] border px-2 py-0.5 rounded-lg font-medium ${innerSurface} ${primaryText}`}
+                              >
+                                {item.quantity} x {itemName} - {subtotal.toFixed(2)}€
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

@@ -592,7 +592,14 @@ export const useTabStore = create<TabState>((set, get) => ({
           timestamp: sale.timestamp,
           type: 'deuda',
           amount: sale.total,
-          description: `Consumo: ${sale.items.map((i) => `${i.quantity}x ${i.product.name}`).join(', ')}${breakdownSuffix}`,
+          description: `Consumo: ${sale.items
+            .map((i) => {
+              const itemName = i.name || i.product?.name || 'Producto';
+              const unitPrice = Number(i.price ?? i.customPrice ?? i.product?.price ?? 0);
+              const sub = Number(i.subtotal ?? unitPrice * i.quantity);
+              return `${i.quantity} x ${itemName} - ${sub.toFixed(2)}€`;
+            })
+            .join(', ')}${breakdownSuffix}`,
           saleId: sale.id,
         };
 
@@ -688,8 +695,10 @@ export const useTabStore = create<TabState>((set, get) => ({
     if (sale && sale.items && sale.items.length > 0) {
       itemsText = sale.items
         .map((i) => {
-          const unitPrice = Number(i.customPrice ?? i.product?.price ?? 0);
-          return `• ${i.quantity}x ${i.product?.name || 'Producto'} (${(unitPrice * i.quantity).toFixed(2)}€)`;
+          const itemName = i.name || i.product?.name || 'Producto';
+          const unitPrice = Number(i.price ?? i.customPrice ?? i.product?.price ?? 0);
+          const subtotal = Number(i.subtotal ?? unitPrice * i.quantity);
+          return `• ${i.quantity} x ${itemName} - ${subtotal.toFixed(2)}€`;
         })
         .join('\n');
     } else if (lastDebtMov?.description) {

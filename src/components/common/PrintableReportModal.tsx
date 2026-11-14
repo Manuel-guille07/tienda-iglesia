@@ -72,11 +72,11 @@ export function calculateSalesAccountingBreakdown(sales: Sale[]): {
         const qty = Number(it.quantity) || 0;
         if (qty <= 0) continue;
 
-        const unitPrice = Number(it.customPrice ?? it.product?.price ?? 0);
-        const lineRevenue = unitPrice * qty;
-        const category = it.product?.category || 'cafeteria';
-        const name = it.product?.name || 'Producto';
-        const key = (it.product?.id || name).toLowerCase();
+        const unitPrice = Number(it.price ?? it.customPrice ?? it.product?.price ?? 0);
+        const lineRevenue = Number(it.subtotal ?? unitPrice * qty);
+        const category = it.category || it.product?.category || 'cafeteria';
+        const name = it.name || it.product?.name || 'Producto';
+        const key = (it.id || it.product?.id || name).toLowerCase();
 
         const isCoffee = isCoffeeCategory(category);
         if (isCoffee) {
@@ -269,7 +269,14 @@ export function exportSalesHistoryToCSV(
       s.sellerName || 'Vendedor',
       s.sellerRole || 'Vendedor',
       s.customerName || '-',
-      (s.items || []).map((it) => `${it.quantity}x ${it.product?.name || 'Producto'}`).join(' | ') || 'Venta directa POS',
+      (s.items || [])
+        .map((it) => {
+          const name = it.name || it.product?.name || 'Producto';
+          const unitPrice = Number(it.price ?? it.customPrice ?? it.product?.price ?? 0);
+          const sub = Number(it.subtotal ?? unitPrice * it.quantity);
+          return `${it.quantity} x ${name} - ${sub.toFixed(2)}€`;
+        })
+        .join(' | ') || 'Venta directa POS',
       (s.total || 0).toFixed(2),
     ])
   );
@@ -488,10 +495,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
                     className="flex items-center justify-between py-2.5 px-2 border-b border-surface-200 border-[#E2DDD5] last:border-b-0 text-xs sm:text-sm"
                   >
                     <span className="font-semibold text-[#141210] pr-3">
-                      <span className="font-mono font-bold text-[#141210] mr-1.5">
-                        {item.quantity} ×
-                      </span>
-                      {item.name}
+                      {item.quantity} x {item.name} - {item.revenue.toFixed(2)}€
                     </span>
                     <span className="font-mono font-bold tabular-nums text-[#141210] shrink-0">
                       {item.revenue.toFixed(2)} €
@@ -658,30 +662,47 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
                     <tr className="border-b border-[#141210]/20 text-[#141210] bg-[#EFECE6]">
                       <th className="py-2 px-2 font-semibold">Ticket</th>
                       <th className="py-2 px-2 font-semibold">Fecha/Hora</th>
+                      <th className="py-2 px-2 font-semibold">Productos</th>
                       <th className="py-2 px-2 font-semibold">Método</th>
                       <th className="py-2 px-2 font-semibold">Cajero</th>
                       <th className="py-2 px-2 font-semibold text-right">Importe</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E2DDD5] font-mono tabular-nums">
-                    {report.sales.slice(0, 50).map((s) => (
-                      <tr key={s.id} className="border-b border-surface-200 border-[#E2DDD5]">
-                        <td className="py-2 px-2 text-[#141210]">#{s.id.slice(0, 8)}</td>
-                        <td className="py-2 px-2 text-[#3D352F]">
-                          {new Date(s.timestamp).toLocaleString('es-ES', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td className="py-2 px-2 uppercase text-[#141210]">{s.paymentMethod}</td>
-                        <td className="py-2 px-2 font-sans text-[#141210]">{s.sellerName}</td>
-                        <td className="py-2 px-2 text-right font-bold text-[#141210]">
-                          {s.total.toFixed(2)}€
-                        </td>
-                      </tr>
-                    ))}
+                    {report.sales.slice(0, 50).map((s) => {
+                      const itemsDetail =
+                        s.items && s.items.length > 0
+                          ? s.items
+                              .map((it) => {
+                                const name = it.name || it.product?.name || 'Producto';
+                                const unitPrice = Number(
+                                  it.price ?? it.customPrice ?? it.product?.price ?? 0
+                                );
+                                const sub = Number(it.subtotal ?? unitPrice * it.quantity);
+                                return `${it.quantity} x ${name} - ${sub.toFixed(2)}€`;
+                              })
+                              .join(', ')
+                          : 'Consumo directo';
+                      return (
+                        <tr key={s.id} className="border-b border-surface-200 border-[#E2DDD5]">
+                          <td className="py-2 px-2 text-[#141210]">#{s.id.slice(0, 8)}</td>
+                          <td className="py-2 px-2 text-[#3D352F]">
+                            {new Date(s.timestamp).toLocaleString('es-ES', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-2 px-2 font-sans text-[#141210]">{itemsDetail}</td>
+                          <td className="py-2 px-2 uppercase text-[#141210]">{s.paymentMethod}</td>
+                          <td className="py-2 px-2 font-sans text-[#141210]">{s.sellerName}</td>
+                          <td className="py-2 px-2 text-right font-bold text-[#141210]">
+                            {s.total.toFixed(2)}€
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

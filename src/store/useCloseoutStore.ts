@@ -7,7 +7,9 @@ import {
   insertAuditLog,
   fromCloseoutSnake,
   getTabPayments,
+  getShiftSales,
 } from '../services/db';
+import { usePOSStore } from './usePOSStore';
 import { fromCents, toCents } from '../utils/finance';
 import toast from 'react-hot-toast';
 
@@ -122,11 +124,13 @@ interface CloseoutState {
   tabCredits: TabCreditRecord[];
   tabPayments: TabPaymentExport[];
   shiftTabPayments: TabPaymentExport[];
+  shiftSales: Sale[];
   lastCloseTimestamp: string | null;
   isSyncingSheets: boolean;
   isClosingShift: boolean;
 
   loadCloseouts: () => Promise<void>;
+  loadShiftSales: (sinceTimestamp?: string | null) => Promise<Sale[]>;
   loadShiftTabPayments: (sinceTimestamp?: string | null) => Promise<TabPaymentExport[]>;
   addTabPayment: (payment: TabPaymentExport) => void;
   addIncident: (text: string, category: Incident['category'], author: string, role: Role) => Incident;
@@ -147,6 +151,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
   tabCredits: [],
   tabPayments: [],
   shiftTabPayments: [],
+  shiftSales: [],
   lastCloseTimestamp: null,
   isSyncingSheets: false,
   isClosingShift: false,
@@ -266,9 +271,10 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
       startOfDay.setHours(0, 0, 0, 0);
       const sinceQueryTs = effectiveLatest || startOfDay.toISOString();
 
-      const [rawShiftPayments, rawAllPayments] = await Promise.all([
+      const [rawShiftPayments, rawAllPayments, dbShiftSales] = await Promise.all([
         getTabPayments(sinceQueryTs),
         getTabPayments(),
+        getShiftSales(sinceQueryTs),
       ]);
 
       const mappedAll = dedupeTabPayments([
@@ -288,6 +294,34 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
         return !isNaN(ms) && (effectiveLatest ? ms > cutoffMs : ms >= cutoffMs);
       });
 
+      const hydratedShiftSales = ((dbShiftSales || []) as Sale[]).filter((s) => {
+        const ms = new Date(s.timestamp).getTime();
+        return !isNaN(ms) && (effectiveLatest ? ms > cutoffMs : ms >= cutoffMs);
+      });
+
+      if (hydratedShiftSales.length > 0) {
+        const posState = usePOSStore.getState();
+        const byId = new Map<string, Sale>();
+        for (const s of hydratedShiftSales) {
+          byId.set(s.id, s);
+        }
+        for (const existing of posState.sales) {
+          if (!byId.has(existing.id)) {
+            byId.set(existing.id, existing);
+          } else {
+            const curr = byId.get(existing.id)!;
+            if ((!curr.items || curr.items.length === 0) && existing.items?.length) {
+              byId.set(existing.id, { ...curr, items: existing.items });
+            }
+          }
+        }
+        usePOSStore.setState({
+          sales: Array.from(byId.values()).sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          ),
+        });
+      }
+
       set({
         shiftCloses,
         lastCloseTimestamp: effectiveLatest,
@@ -296,9 +330,58 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
         tabCredits: tabCredits.length > 0 ? tabCredits : get().tabCredits,
         tabPayments: mappedAll,
         shiftTabPayments: mappedShift,
+        shiftSales: hydratedShiftSales,
       });
     } catch (error) {
       console.error('[useCloseoutStore] Error al cargar cierres y auditorías desde Supabase:', error);
+    }
+  },
+
+  loadShiftSales: async (sinceTimestamp) => {
+    try {
+      const effectiveLatest =
+        sinceTimestamp !== undefined ? sinceTimestamp : get().lastCloseTimestamp;
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const sinceQueryTs = effectiveLatest || startOfDay.toISOString();
+      const cutoffMs = effectiveLatest
+        ? new Date(effectiveLatest).getTime()
+        : startOfDay.getTime();
+
+      const dbSales = await getShiftSales(sinceQueryTs);
+      const hydrated = ((dbSales || []) as Sale[]).filter((s) => {
+        const ms = new Date(s.timestamp).getTime();
+        return !isNaN(ms) && (effectiveLatest ? ms > cutoffMs : ms >= cutoffMs);
+      });
+
+      if (hydrated.length > 0) {
+        const posState = usePOSStore.getState();
+        const byId = new Map<string, Sale>();
+        for (const s of hydrated) {
+          byId.set(s.id, s);
+        }
+        for (const existing of posState.sales) {
+          if (!byId.has(existing.id)) {
+            byId.set(existing.id, existing);
+          } else {
+            const curr = byId.get(existing.id)!;
+            if ((!curr.items || curr.items.length === 0) && existing.items?.length) {
+              byId.set(existing.id, { ...curr, items: existing.items });
+            }
+          }
+        }
+        usePOSStore.setState({
+          sales: Array.from(byId.values()).sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          ),
+        });
+      }
+
+      set({ shiftSales: hydrated });
+      return hydrated;
+    } catch (error) {
+      console.error('[useCloseoutStore] Error al consultar ventas del turno desde Supabase:', error);
+      return get().shiftSales;
     }
   },
 
@@ -481,6 +564,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
           shiftCloses: [confirmedClose, ...existingWithoutDup],
           lastCloseTimestamp: nextLastTs,
           shiftTabPayments: [],
+          shiftSales: [],
         };
       });
 
@@ -542,13 +626,14 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
           shiftCloses: [remoteShiftClose, ...currentCloses],
           lastCloseTimestamp: newTimestamp,
           shiftTabPayments: [],
+          shiftSales: [],
         });
 
         toast.success(
           `Caja cerrada por ${remoteShiftClose.closedBy}. Turno reiniciado a 0.00€`
         );
       } else {
-        set({ lastCloseTimestamp: newTimestamp, shiftTabPayments: [] });
+        set({ lastCloseTimestamp: newTimestamp, shiftTabPayments: [], shiftSales: [] });
       }
     } else {
       get().loadCloseouts();
@@ -637,7 +722,14 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
         s.paymentMethod,
         s.total.toFixed(2),
         s.sellerName,
-        s.items.map((it) => `${it.quantity}x ${it.product.name}`).join(' | '),
+        s.items
+          .map((it) => {
+            const name = it.name || it.product?.name || 'Producto';
+            const unitPrice = Number(it.price ?? it.customPrice ?? it.product?.price ?? 0);
+            const sub = Number(it.subtotal ?? unitPrice * it.quantity);
+            return `${it.quantity} x ${name} - ${sub.toFixed(2)}€`;
+          })
+          .join(' | '),
       ])
     );
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePOSStore } from '../../store/usePOSStore';
 import { useTabStore } from '../../store/useTabStore';
 import { useCloseoutStore } from '../../store/useCloseoutStore';
@@ -32,10 +32,15 @@ export const DashboardScreen: React.FC = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { sales, products, rawMaterials } = usePOSStore();
+  const { sales, products, rawMaterials, loadSales } = usePOSStore();
   const { customers } = useTabStore();
-  const { voidAudits, tabPayments } = useCloseoutStore();
+  const { voidAudits, tabPayments, loadCloseouts } = useCloseoutStore();
   const { currentUser } = useAuthStore();
+
+  useEffect(() => {
+    loadSales();
+    loadCloseouts();
+  }, [loadSales, loadCloseouts]);
 
   const [periodFilter, setPeriodFilter] = useState<'month' | '7days' | 'all'>('month');
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
@@ -212,13 +217,14 @@ export const DashboardScreen: React.FC = () => {
     cafeteriaSales.forEach((s) => {
       if (s.items && s.items.length > 0) {
         s.items.forEach((it) => {
-          const id = it.product?.id || it.product?.name || 'item';
-          const name = it.product?.name || 'Producto';
-          const category = it.product?.category || 'cafeteria';
-          const price = it.customPrice ?? it.product?.price ?? 0;
+          const name = it.name || it.product?.name || 'Producto';
+          const id = it.id || it.product?.id || name || 'item';
+          const category = it.category || it.product?.category || 'cafeteria';
+          const price = Number(it.price ?? it.customPrice ?? it.product?.price ?? 0);
+          const lineRev = Number(it.subtotal ?? fromCents(toCents(price) * it.quantity));
           const prev = map.get(id) || { name, category, qty: 0, revenue: 0 };
           prev.qty += it.quantity;
-          prev.revenue = fromCents(toCents(prev.revenue) + toCents(price) * it.quantity);
+          prev.revenue = fromCents(toCents(prev.revenue) + toCents(lineRev));
           map.set(id, prev);
         });
       }
