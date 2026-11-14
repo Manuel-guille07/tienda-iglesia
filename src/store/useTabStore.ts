@@ -1,13 +1,58 @@
 import { create } from 'zustand';
 import { CustomerTab, Sale, TabMovement } from '../types';
-import { getTabs, getTabPayments, insertTab, insertTabPayment, updateTabBalances } from '../services/db';
+import {
+  getTabs,
+  getTabPayments,
+  insertTab,
+  insertTabPayment,
+  updateTabBalances,
+  updateTabProfile,
+} from '../services/db';
 import { useCloseoutStore } from './useCloseoutStore';
 import { roundMoney, toCents, isValidPositiveMoney } from '../utils/finance';
+
+const TAB_PROFILES_STORAGE_KEY = 'el_chiringuito_tab_profiles_v1';
+
+interface CachedTabProfileMeta {
+  congregation: string;
+  ministry: string;
+  churchGroup: string;
+  phone?: string;
+}
+
+function loadCachedTabProfiles(): Record<string, CachedTabProfileMeta> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(TAB_PROFILES_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCachedTabProfile(id: string, meta: CachedTabProfileMeta) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const current = loadCachedTabProfiles();
+    current[id] = meta;
+    window.localStorage.setItem(TAB_PROFILES_STORAGE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export interface TabMutationResult {
   success: boolean;
   customer?: CustomerTab;
   error?: string;
+}
+
+export interface UpdateCustomerPayload {
+  name: string;
+  phone?: string | null;
+  congregation?: string | null;
+  ministry?: string | null;
+  churchGroup?: string | null;
 }
 
 interface TabState {
@@ -20,12 +65,31 @@ interface TabState {
   setSearchQuery: (query: string) => void;
   setSelectedCustomerId: (id: string | null) => void;
 
-  addCustomer: (name: string, phone: string, churchGroup?: string) => Promise<TabMutationResult>;
-  addTab: (
-    nameOrData: string | { name: string; phone?: string; churchGroup?: string; balance?: number; debt?: number },
-    phone?: string,
-    churchGroup?: string
+  addCustomer: (
+    name: string,
+    phone?: string | null,
+    churchGroup?: string | null,
+    congregation?: string | null,
+    ministry?: string | null
   ) => Promise<TabMutationResult>;
+  addTab: (
+    nameOrData:
+      | string
+      | {
+          name: string;
+          phone?: string | null;
+          churchGroup?: string | null;
+          congregation?: string | null;
+          ministry?: string | null;
+          balance?: number;
+          debt?: number;
+        },
+    phone?: string | null,
+    churchGroup?: string | null,
+    congregation?: string | null,
+    ministry?: string | null
+  ) => Promise<TabMutationResult>;
+  updateCustomer: (customerId: string, data: UpdateCustomerPayload) => Promise<TabMutationResult>;
   addPrepaidBalance: (
     customerId: string,
     amount: number,
@@ -72,7 +136,11 @@ interface TabState {
   ) => { newBalance: number; newDebt: number; prepaidUsed: number; netTabDebt: number };
   revertSaleFromTab: (sale: Sale) => Promise<void>;
 
-  generateReceiptText: (customer: CustomerTab, sale?: Sale) => string;
+  generateReceiptText: (
+    customer?: CustomerTab | null,
+    sale?: Sale | null,
+    abonoAmount?: number | null
+  ) => string;
   getWhatsAppShareUrl: (phone: string, text: string) => string;
 }
 
@@ -87,8 +155,11 @@ export const useTabStore = create<TabState>((set, get) => ({
       const [data, paymentsData] = await Promise.all([getTabs(), getTabPayments()]);
       if (data && data.length > 0) {
         const existingById = new Map(get().customers.map((c) => [c.id, c]));
+        const cachedMeta = loadCachedTabProfiles();
         const hydrated = (data as CustomerTab[]).map((c) => {
-          const prevMovements = existingById.get(c.id)?.movements || [];
+          const prev = existingById.get(c.id);
+          const meta = cachedMeta[c.id];
+          const prevMovements = prev?.movements || [];
           const dbMovements: TabMovement[] = (paymentsData || [])
             .filter(
               (p: any) =>
@@ -123,8 +194,21 @@ export const useTabStore = create<TabState>((set, get) => ({
             (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
 
+          const congregation = String(
+            c.congregation || prev?.congregation || meta?.congregation || ''
+          );
+          const ministry = String(c.ministry || prev?.ministry || meta?.ministry || '');
+          const composedGroup = [congregation, ministry].filter(Boolean).join(' · ');
+          const churchGroup = String(
+            composedGroup || c.churchGroup || prev?.churchGroup || meta?.churchGroup || 'Congregación'
+          );
+
           return {
             ...c,
+            phone: String(c.phone ?? prev?.phone ?? meta?.phone ?? ''),
+            congregation,
+            ministry,
+            churchGroup,
             movements: mergedMovements,
           };
         });
@@ -138,27 +222,35 @@ export const useTabStore = create<TabState>((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedCustomerId: (id) => set({ selectedCustomerId: id }),
 
-  addTab: async (nameOrData, phoneArg, churchGroupArg) => {
+  addTab: async (nameOrData, phoneArg, churchGroupArg, congregationArg, ministryArg) => {
     if (get().isMutatingTab) {
       return { success: false, error: 'Operación en curso, espera un momento...' };
     }
 
-    let name: string;
-    let phone: string;
-    let churchGroup: string;
+    let name = '';
+    let phone = '';
+    let congregation = '';
+    let ministry = '';
+    let churchGroup = '';
     let initialBalance = 0;
     let initialDebt = 0;
 
     if (typeof nameOrData === 'object' && nameOrData !== null) {
-      name = (nameOrData.name || '').trim();
-      phone = (nameOrData.phone || '').trim();
-      churchGroup = (nameOrData.churchGroup || 'Congregación').trim();
+      name = String(nameOrData.name ?? '').trim();
+      phone = String(nameOrData.phone ?? '').trim();
+      congregation = String(nameOrData.congregation ?? '').trim();
+      ministry = String(nameOrData.ministry ?? '').trim();
+      const fallbackGroup = [congregation, ministry].filter(Boolean).join(' · ') || 'Congregación';
+      churchGroup = String(nameOrData.churchGroup ?? fallbackGroup).trim() || 'Congregación';
       initialBalance = Math.max(0, roundMoney(Number(nameOrData.balance ?? 0)));
       initialDebt = Math.max(0, roundMoney(Number(nameOrData.debt ?? 0)));
     } else {
-      name = (nameOrData || '').trim();
-      phone = (phoneArg || '').trim();
-      churchGroup = (churchGroupArg || 'Congregación').trim();
+      name = String(nameOrData ?? '').trim();
+      phone = String(phoneArg ?? '').trim();
+      congregation = String(congregationArg ?? '').trim();
+      ministry = String(ministryArg ?? '').trim();
+      const fallbackGroup = [congregation, ministry].filter(Boolean).join(' · ') || 'Congregación';
+      churchGroup = String(churchGroupArg ?? fallbackGroup).trim() || 'Congregación';
     }
 
     if (!name) {
@@ -170,6 +262,8 @@ export const useTabStore = create<TabState>((set, get) => ({
       const rows = await insertTab({
         name,
         phone,
+        congregation,
+        ministry,
         church_group: churchGroup,
         balance: initialBalance,
         debt: initialDebt,
@@ -178,13 +272,22 @@ export const useTabStore = create<TabState>((set, get) => ({
       const saved = rows?.[0];
       const finalCustomer: CustomerTab = {
         id: saved?.id ? String(saved.id) : `cust-${Date.now()}`,
-        name: saved?.name || name,
-        phone: saved?.phone || phone,
-        churchGroup: saved?.churchGroup || churchGroup,
+        name: String(saved?.name || name),
+        phone: String(saved?.phone ?? phone ?? ''),
+        congregation: String(saved?.congregation ?? congregation ?? ''),
+        ministry: String(saved?.ministry ?? ministry ?? ''),
+        churchGroup: String(saved?.churchGroup || churchGroup || 'Congregación'),
         balance: typeof saved?.balance === 'number' ? saved.balance : initialBalance,
         debt: typeof saved?.debt === 'number' ? saved.debt : initialDebt,
         movements: saved?.movements || [],
       };
+
+      saveCachedTabProfile(finalCustomer.id, {
+        congregation: finalCustomer.congregation || '',
+        ministry: finalCustomer.ministry || '',
+        churchGroup: finalCustomer.churchGroup || 'Congregación',
+        phone: finalCustomer.phone || '',
+      });
 
       set((state) => ({
         customers: [
@@ -205,8 +308,82 @@ export const useTabStore = create<TabState>((set, get) => ({
     }
   },
 
-  addCustomer: (name, phone, churchGroup) => {
-    return get().addTab(name, phone, churchGroup);
+  addCustomer: (name, phone = '', churchGroup = 'Congregación', congregation = '', ministry = '') => {
+    return get().addTab({
+      name,
+      phone: phone ?? '',
+      churchGroup: churchGroup ?? 'Congregación',
+      congregation: congregation ?? '',
+      ministry: ministry ?? '',
+    });
+  },
+
+  updateCustomer: async (customerId, data) => {
+    if (get().isMutatingTab) {
+      return { success: false, error: 'Operación en curso, espera un momento...' };
+    }
+
+    const cleanName = String(data.name ?? '').trim();
+    if (!cleanName) {
+      return { success: false, error: 'El nombre del hermano/a no puede estar vacío' };
+    }
+
+    const existing = get().customers.find((c) => c.id === customerId);
+    if (!existing) {
+      return { success: false, error: 'Hermano/a no encontrado' };
+    }
+
+    const cleanPhone = String(data.phone ?? '').trim();
+    const cleanCongregation = String(data.congregation ?? '').trim();
+    const cleanMinistry = String(data.ministry ?? '').trim();
+    const composedGroup = [cleanCongregation, cleanMinistry].filter(Boolean).join(' · ');
+    const cleanChurchGroup = String(
+      data.churchGroup ?? (composedGroup || existing.churchGroup || 'Congregación')
+    ).trim();
+
+    set({ isMutatingTab: true });
+    try {
+      await updateTabProfile(customerId, {
+        name: cleanName,
+        phone: cleanPhone,
+        congregation: cleanCongregation,
+        ministry: cleanMinistry,
+        churchGroup: cleanChurchGroup,
+      });
+
+      saveCachedTabProfile(customerId, {
+        congregation: cleanCongregation,
+        ministry: cleanMinistry,
+        churchGroup: cleanChurchGroup,
+        phone: cleanPhone,
+      });
+
+      let updatedCustomer: CustomerTab | undefined;
+      set((state) => ({
+        customers: state.customers.map((c) => {
+          if (c.id !== customerId) return c;
+          updatedCustomer = {
+            ...c,
+            name: cleanName,
+            phone: cleanPhone,
+            congregation: cleanCongregation,
+            ministry: cleanMinistry,
+            churchGroup: cleanChurchGroup,
+          };
+          return updatedCustomer;
+        }),
+      }));
+
+      return { success: true, customer: updatedCustomer };
+    } catch (error: any) {
+      console.error('Error al actualizar perfil de cliente en Supabase:', error);
+      return {
+        success: false,
+        error: error?.message || 'Error de red: No se pudo actualizar el perfil en Supabase',
+      };
+    } finally {
+      set({ isMutatingTab: false });
+    }
   },
 
   addPrepaidBalance: async (
@@ -486,61 +663,59 @@ export const useTabStore = create<TabState>((set, get) => ({
     }
   },
 
-  generateReceiptText: (customer, sale) => {
-    const lastPayment = customer.movements?.find((m) => m.type === 'pago');
-    const isPaymentReceipt = !sale && !!lastPayment;
-    const dateFormatted = new Date(sale?.timestamp || lastPayment?.timestamp || Date.now()).toLocaleString('es-ES', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
+  generateReceiptText: (customer, sale, abonoAmount) => {
+    const customerName = (customer?.name || sale?.customerName || 'Hermano/a').trim();
+    const currentDebt = Number(customer?.debt ?? sale?.netTabDebt ?? 0);
+    const debtStr = `${currentDebt.toFixed(2)}€`;
 
-    if (isPaymentReceipt && lastPayment) {
-      const methodStr = lastPayment.paymentMethod === 'datafono' ? 'Datáfono / Tarjeta 💳' : 'Efectivo 💶';
-      return `🧾 *JUSTIFICANTE DE ABONO / CAFETERÍA IGLESIA* ☕
---------------------------------------------
-👤 *Hermano/a:* ${customer.name}
-⛪ *Ministerio/Grupo:* ${customer.churchGroup || 'Congregación'}
-📅 *Fecha:* ${dateFormatted}
---------------------------------------------
-💵 *Concepto:* ${lastPayment.description || 'Abono de deuda pendiente'}
-💳 *Método de Pago:* ${methodStr}
-💰 *Importe Abonado:* ${lastPayment.amount.toFixed(2)}€
---------------------------------------------
-📊 *Estado Actual de la Cuenta:*
-${customer.debt > 0 ? `⚠️ *Deuda Pendiente Restante:* ${customer.debt.toFixed(2)}€\n` : '✅ *¡Deuda totalmente saldada!*\n'}${customer.balance > 0 ? `🎁 *Saldo a Favor:* ${customer.balance.toFixed(2)}€\n` : ''}${customer.debt === 0 && customer.balance === 0 ? '✨ *Cuenta al día (Saldo: 0.00€)*\n' : ''}
-🙏 _¡Muchas gracias por tu compromiso y bendición a la obra de Dios!_`;
+    const lastPayment = customer?.movements?.find((m) => m.type === 'pago' && !m.saleId);
+    const effectiveAbono =
+      typeof abonoAmount === 'number' && abonoAmount > 0
+        ? abonoAmount
+        : !sale && customer?.movements?.[0]?.type === 'pago'
+        ? lastPayment?.amount
+        : undefined;
+
+    // Plantilla C (Abono de Deuda)
+    if (effectiveAbono !== undefined && effectiveAbono > 0) {
+      const cantidadStr = `${effectiveAbono.toFixed(2)}€`;
+      return `¡Hola, ${customerName}! 👋 Confirmamos tu abono de ${cantidadStr} en El Chiringuito.\n📝 Tu nuevo saldo pendiente es de: ${debtStr}.\n¡Muchísimas gracias! Bendiciones. ✨`;
     }
 
+    // Construir lista de productos
+    const lastDebtMov = customer?.movements?.find((m) => m.type === 'deuda');
     let itemsText = '';
-    if (sale && sale.items.length > 0) {
+    if (sale && sale.items && sale.items.length > 0) {
       itemsText = sale.items
-        .map((i) => `• ${i.quantity}x ${i.product.name} (${(i.product.price * i.quantity).toFixed(2)}€)`)
+        .map((i) => {
+          const unitPrice = Number(i.customPrice ?? i.product?.price ?? 0);
+          return `• ${i.quantity}x ${i.product?.name || 'Producto'} (${(unitPrice * i.quantity).toFixed(2)}€)`;
+        })
         .join('\n');
+    } else if (lastDebtMov?.description) {
+      itemsText = `• ${lastDebtMov.description.replace(/^Consumo:\s*/i, '')}`;
     } else {
-      itemsText = '• Estado de cuenta general';
+      itemsText = '• Consumo en cafetería';
     }
 
-    const totalStr = sale ? `${sale.total.toFixed(2)}€` : 'N/A';
+    const totalNum = sale
+      ? Number(sale.total || 0)
+      : lastDebtMov
+      ? Number(lastDebtMov.amount || 0)
+      : currentDebt;
+    const totalStr = `${totalNum.toFixed(2)}€`;
 
-    return `🧾 *RECIBO CHIRINGUITO / CAFETERÍA IGLESIA* ☕
---------------------------------------------
-👤 *Cliente:* ${customer.name}
-⛪ *Ministerio/Grupo:* ${customer.churchGroup || 'Congregación'}
-📅 *Fecha:* ${dateFormatted}
---------------------------------------------
-🛒 *Detalle de Consumo:*
-${itemsText}
---------------------------------------------
-💰 *Total:* ${totalStr}
-💳 *Método:* Fiado / Cuenta Personal
+    // Plantilla A (Venta Efectivo/Datáfono)
+    if (sale && sale.paymentMethod !== 'fiado') {
+      return `¡Hola! 👋 Aquí tienes el detalle de lo que disfrutaste hoy en El Chiringuito.\n${itemsText}\nTotal: ${totalStr}\n¡Gracias por compartir este rato con nosotros! ✨`;
+    }
 
-📊 *Estado Actual de la Cuenta:*
-${customer.balance > 0 ? `✅ *Saldo a Favor:* ${customer.balance.toFixed(2)}€\n` : ''}${customer.debt > 0 ? `⚠️ *Deuda Pendiente:* ${customer.debt.toFixed(2)}€\n` : ''}${customer.balance === 0 && customer.debt === 0 ? '✨ *Cuenta al día (Saldo: 0.00€)*\n' : ''}
-🙏 _¡Muchas gracias por tu generosidad y apoyo a la iglesia! Dios te bendiga grandemente._`;
+    // Plantilla B (Venta a Fiado)
+    return `¡Hola, ${customerName}! 👋 Te dejamos el resumen de tu consumo de hoy en El Chiringuito:\n${itemsText}\nTotal del ticket: ${totalStr}\n📝 Tu saldo pendiente actualizado es de: ${debtStr}.\n¡Gracias por tu apoyo! 🙌`;
   },
 
   getWhatsAppShareUrl: (phone, text) => {
-    const cleanPhone = phone.replace(/[^\d+]/g, '');
+    const cleanPhone = (phone || '').replace(/[^\d+]/g, '');
     const encoded = encodeURIComponent(text);
     return cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
   },

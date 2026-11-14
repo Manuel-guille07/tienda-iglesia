@@ -13,23 +13,39 @@ export const NewCustomerModal: React.FC<{ isOpen: boolean; onClose: () => void }
 
   const { addCustomer } = useTabStore();
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('+34');
-  const [group, setGroup] = useState('Congregación');
+  const [phone, setPhone] = useState('');
+  const [congregation, setCongregation] = useState('Congregación');
+  const [ministry, setMinistry] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCreate = async () => {
     if (isSubmitting) return;
-    const cleanName = name.trim();
+    const cleanName = (name ?? '').trim();
     if (!cleanName) {
       toast.error('El nombre del cliente no puede estar vacío');
       return;
     }
+    const cleanPhone = (phone ?? '').trim();
+    const cleanCongregation = (congregation ?? '').trim();
+    const cleanMinistry = (ministry ?? '').trim();
+    const composedGroup =
+      [cleanCongregation, cleanMinistry].filter(Boolean).join(' · ') || 'Congregación';
+
     setIsSubmitting(true);
     try {
-      const res = await addCustomer(cleanName, phone.trim(), group.trim() || 'Congregación');
+      const res = await addCustomer(
+        cleanName,
+        cleanPhone,
+        composedGroup,
+        cleanCongregation,
+        cleanMinistry
+      );
       if (res.success) {
         toast.success(t('toast.customerAdded'));
         setName('');
+        setPhone('');
+        setCongregation('Congregación');
+        setMinistry('');
         onClose();
       } else {
         toast.error(res.error || 'Error de red al guardar el cliente');
@@ -68,15 +84,27 @@ export const NewCustomerModal: React.FC<{ isOpen: boolean; onClose: () => void }
             className={inputClasses}
           />
         </div>
-        <div>
-          <label className="text-sm font-medium block mb-1">Ministerio / Grupo</label>
-          <input
-            type="text"
-            placeholder="Congregación"
-            value={group}
-            onChange={(e) => setGroup(e.target.value)}
-            className={inputClasses}
-          />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-sm font-medium block mb-1">Congregación</label>
+            <input
+              type="text"
+              placeholder="Congregación"
+              value={congregation}
+              onChange={(e) => setCongregation(e.target.value)}
+              className={inputClasses}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-1">Ministerio / Grupo</label>
+            <input
+              type="text"
+              placeholder="Ej. Alabanza, Jóvenes..."
+              value={ministry}
+              onChange={(e) => setMinistry(e.target.value)}
+              className={inputClasses}
+            />
+          </div>
         </div>
         <Button
           variant="primary"

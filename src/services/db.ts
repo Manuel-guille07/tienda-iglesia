@@ -230,14 +230,24 @@ export function fromSaleSnake(row: Record<string, any>) {
 }
 
 // 3. TABS (Fiados)
-// Esquema: client_name, phone, debt_amount, prepaid_amount
+// Esquema base: client_name, phone, debt_amount, prepaid_amount (+ opcionales congregation, ministry, church_group)
 export function toTabSnake(item: Record<string, any>) {
   const payload: Record<string, any> = {
-    client_name: item.client_name ?? item.name ?? '',
-    phone: item.phone || '',
+    client_name: String(item.client_name ?? item.name ?? '').trim(),
+    phone: String(item.phone ?? '').trim(),
     debt_amount: Number(item.debt_amount ?? item.debt ?? 0),
     prepaid_amount: Number(item.prepaid_amount ?? item.balance ?? 0),
   };
+
+  if (item.congregation !== undefined) {
+    payload.congregation = item.congregation === null ? '' : String(item.congregation).trim();
+  }
+  if (item.ministry !== undefined) {
+    payload.ministry = item.ministry === null ? '' : String(item.ministry).trim();
+  }
+  if (item.church_group !== undefined || item.churchGroup !== undefined) {
+    payload.church_group = String(item.church_group ?? item.churchGroup ?? '').trim();
+  }
 
   const validId = cleanUUID(item.id);
   if (validId) {
@@ -248,10 +258,15 @@ export function toTabSnake(item: Record<string, any>) {
 }
 
 export function fromTabSnake(row: Record<string, any>) {
-  const clientName = row.client_name ?? row.name ?? '';
+  const clientName = String(row.client_name ?? row.name ?? '');
+  const phone = String(row.phone ?? '');
   const debt = Number(row.debt_amount ?? row.debt ?? 0);
   const balance = Number(row.prepaid_amount ?? row.balance ?? 0);
-  const churchGroup = row.church_group ?? row.churchGroup ?? 'Congregación';
+  const congregation = String(row.congregation ?? '');
+  const ministry = String(row.ministry ?? '');
+  const rawGroup = String(row.church_group ?? row.churchGroup ?? '');
+  const composedGroup = [congregation, ministry].filter(Boolean).join(' · ');
+  const churchGroup = composedGroup || rawGroup || 'Congregación';
 
   let movements = [];
   try {
@@ -264,11 +279,13 @@ export function fromTabSnake(row: Record<string, any>) {
     id: String(row.id),
     name: clientName,
     client_name: clientName,
-    phone: row.phone || '',
+    phone,
     balance,
     prepaid_amount: balance,
     debt,
     debt_amount: debt,
+    congregation,
+    ministry,
     churchGroup,
     church_group: churchGroup,
     movements,
@@ -655,11 +672,29 @@ export async function insertTab(tab: Record<string, any> | Record<string, any>[]
 
     const allHaveValidId = payload.length > 0 && payload.every((p) => Boolean(p.id));
 
-    const query = allHaveValidId
-      ? supabase.from('tabs').upsert(payload, { onConflict: 'id' })
-      : supabase.from('tabs').insert(payload);
+    const runQuery = (rows: Record<string, any>[]) =>
+      allHaveValidId
+        ? supabase.from('tabs').upsert(rows, { onConflict: 'id' }).select()
+        : supabase.from('tabs').insert(rows).select();
 
-    const { data, error } = await query.select();
+    let { data, error } = await runQuery(payload);
+
+    // Fallback seguro si congregation, ministry o church_group aún no existen en el esquema remoto
+    if (
+      error &&
+      error.message &&
+      (error.message.includes('congregation') ||
+        error.message.includes('ministry') ||
+        error.message.includes('church_group') ||
+        error.message.includes('schema cache'))
+    ) {
+      const fallbackPayload = payload.map(
+        ({ congregation: _c, ministry: _m, church_group: _cg, ...rest }) => rest
+      );
+      const retry = await runQuery(fallbackPayload);
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.warn('[Supabase] insertTab warning:', error);
@@ -673,6 +708,79 @@ export async function insertTab(tab: Record<string, any> | Record<string, any>[]
 }
 
 export const insertTabs = insertTab;
+
+/**
+ * Actualiza los datos de perfil (nombre, teléfono, congregación, ministerio) de un cliente en Supabase
+ */
+export async function updateTabProfile(
+  tabId: string,
+  updates: {
+    name: string;
+    phone?: string | null;
+    congregation?: string | null;
+    ministry?: string | null;
+    churchGroup?: string | null;
+  }
+) {
+  try {
+    const validId = cleanUUID(tabId);
+    if (!validId) return null;
+
+    const cleanName = String(updates.name ?? '').trim();
+    const cleanPhone = String(updates.phone ?? '').trim();
+    const cleanCongregation = String(updates.congregation ?? '').trim();
+    const cleanMinistry = String(updates.ministry ?? '').trim();
+    const cleanGroup =
+      String(
+        updates.churchGroup ??
+          ([cleanCongregation, cleanMinistry].filter(Boolean).join(' · ') || 'Congregación')
+      ).trim();
+
+    const fullPayload: Record<string, any> = {
+      client_name: cleanName,
+      phone: cleanPhone,
+      congregation: cleanCongregation,
+      ministry: cleanMinistry,
+      church_group: cleanGroup,
+    };
+
+    let { data, error } = await supabase
+      .from('tabs')
+      .update(fullPayload)
+      .eq('id', validId)
+      .select();
+
+    if (
+      error &&
+      error.message &&
+      (error.message.includes('congregation') ||
+        error.message.includes('ministry') ||
+        error.message.includes('church_group') ||
+        error.message.includes('schema cache'))
+    ) {
+      const retry = await supabase
+        .from('tabs')
+        .update({
+          client_name: cleanName,
+          phone: cleanPhone,
+        })
+        .eq('id', validId)
+        .select();
+      data = retry.data;
+      error = retry.error;
+    }
+
+    if (error) {
+      console.warn('[Supabase] updateTabProfile warning:', error);
+      throw error;
+    }
+
+    return data && data[0] ? fromTabSnake(data[0]) : null;
+  } catch (err) {
+    console.warn('[Supabase] updateTabProfile catch:', err);
+    throw err;
+  }
+}
 
 /**
  * Actualiza los saldos (deuda y prepago) de un cliente/fiado en Supabase

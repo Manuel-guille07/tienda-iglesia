@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useTabStore } from '../../store/useTabStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
-import { Users, Search, Plus, MessageSquareShare, CreditCard, Banknote } from 'lucide-react';
+import { Users, Search, Plus, MessageSquareShare, CreditCard, Banknote, Pencil } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { CustomerTab } from '../../types';
 import { WhatsAppReceiptModal } from './WhatsAppReceiptModal';
 import { NewCustomerModal } from './NewCustomerModal';
+import { EditCustomerModal } from './EditCustomerModal';
 import { parseMoneyInput, roundMoney, toCents } from '../../utils/finance';
 import toast from 'react-hot-toast';
 
@@ -22,17 +23,24 @@ export const TabsScreen: React.FC = () => {
   const [cust, setCust] = useState<CustomerTab | null>(null);
   const [action, setAction] = useState<'balance' | 'pay' | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [lastAbonoAmount, setLastAbonoAmount] = useState<number | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [amount, setAmount] = useState<number>(10);
   const [amountDraft, setAmountDraft] = useState<string>('10');
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'datafono'>('efectivo');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const filtered = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.churchGroup && c.churchGroup.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = customers.filter((c) => {
+    const q = search.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.churchGroup && c.churchGroup.toLowerCase().includes(q)) ||
+      (c.congregation && c.congregation.toLowerCase().includes(q)) ||
+      (c.ministry && c.ministry.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.toLowerCase().includes(q))
+    );
+  });
 
   const handleAction = async () => {
     if (isSubmitting) return;
@@ -93,6 +101,7 @@ export const TabsScreen: React.FC = () => {
         }
         const updated = res.customer || useTabStore.getState().customers.find((c) => c.id === cust.id);
         if (updated) setCust(updated);
+        setLastAbonoAmount(cleanAmount);
         toast.success('Abono registrado con éxito');
         setAction(null);
         setIsReceiptOpen(true);
@@ -147,104 +156,147 @@ export const TabsScreen: React.FC = () => {
 
       {/* Tarjetas de Clientes Quiet Luxury */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((c) => (
-          <div
-            key={c.id}
-            className={`rounded-3xl p-5 space-y-4 border transition ${
-              isDark
-                ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
-                : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
-            }`}
-          >
-            <div className="flex justify-between items-start gap-2">
-              <div>
-                <h3 className="text-lg font-medium leading-snug">{c.name}</h3>
-                <span className={`text-xs font-medium block mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-                  {c.churchGroup} · {c.phone}
-                </span>
-              </div>
-              <button
-                type="button"
-                aria-label="Enviar recibo por WhatsApp"
-                onClick={() => {
-                  setCust(c);
-                  setIsReceiptOpen(true);
-                }}
-                className={`w-11 h-11 rounded-full border flex items-center justify-center transition cursor-pointer shrink-0 ${
-                  isDark
-                    ? 'bg-[#211D1A] border-[#2A2420] text-emerald-400 hover:border-emerald-500'
-                    : 'bg-[#EFECE6] border-[#E2DDD5] text-emerald-800 hover:border-emerald-600'
-                }`}
-              >
-                <MessageSquareShare className="w-5 h-5" />
-              </button>
-            </div>
+        {filtered.map((c) => {
+          const groupLabel =
+            [c.congregation, c.ministry].filter(Boolean).join(' · ') ||
+            c.churchGroup ||
+            'Congregación';
+          const phoneLabel = c.phone && c.phone.trim() ? c.phone.trim() : 'Sin teléfono';
 
+          return (
             <div
-              className={`grid grid-cols-2 gap-3 p-3.5 rounded-2xl border ${
-                isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+              key={c.id}
+              className={`rounded-3xl p-5 space-y-4 border transition ${
+                isDark
+                  ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+                  : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
               }`}
             >
-              <div>
-                <span className={`text-xs block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-                  Saldo Prepago
-                </span>
-                <span className="text-lg font-semibold tabular-nums text-emerald-500">
-                  {c.balance.toFixed(2)} €
-                </span>
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-medium leading-snug break-words">{c.name}</h3>
+                  <span className={`text-xs font-medium block mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+                    {groupLabel} · {phoneLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    aria-label="Editar Perfil"
+                    title="Editar Perfil"
+                    onClick={() => {
+                      setCust(c);
+                      setIsEditOpen(true);
+                    }}
+                    className={`min-h-[40px] px-3 rounded-full border flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer ${
+                      isDark
+                        ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] hover:border-[#EFECE6]'
+                        : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] hover:border-[#141210]'
+                    }`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Editar Perfil</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Enviar recibo por WhatsApp"
+                    title="Enviar recibo por WhatsApp"
+                    onClick={() => {
+                      setCust(c);
+                      setLastAbonoAmount(null);
+                      setIsReceiptOpen(true);
+                    }}
+                    className={`w-10 h-10 rounded-full border flex items-center justify-center transition cursor-pointer shrink-0 ${
+                      isDark
+                        ? 'bg-[#211D1A] border-[#2A2420] text-emerald-400 hover:border-emerald-500'
+                        : 'bg-[#EFECE6] border-[#E2DDD5] text-emerald-800 hover:border-emerald-600'
+                    }`}
+                  >
+                    <MessageSquareShare className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <div>
-                <span className={`text-xs block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-                  Deuda Pendiente
-                </span>
-                <span
-                  className={`text-lg font-semibold tabular-nums ${
-                    c.debt > 0 ? 'text-rose-500' : isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-                  }`}
-                >
-                  {c.debt.toFixed(2)} €
-                </span>
-              </div>
-            </div>
 
-            <div className="flex gap-2.5 pt-1">
-              <Button
-                variant="outline"
-                size="md"
-                className="flex-1"
-                onClick={() => {
-                  setCust(c);
-                  setAction('balance');
-                  setAmount(10);
-                  setAmountDraft('10');
-                  setPaymentMethod('efectivo');
-                }}
+              <div
+                className={`grid grid-cols-2 gap-3 p-3.5 rounded-2xl border ${
+                  isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
+                }`}
               >
-                + Cargar Saldo
-              </Button>
-              {c.debt > 0 && (
+                <div>
+                  <span className={`text-xs block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+                    Saldo Prepago
+                  </span>
+                  <span className="text-lg font-semibold tabular-nums text-emerald-500">
+                    {c.balance.toFixed(2)} €
+                  </span>
+                </div>
+                <div>
+                  <span className={`text-xs block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+                    Deuda Pendiente
+                  </span>
+                  <span
+                    className={`text-lg font-semibold tabular-nums ${
+                      c.debt > 0 ? 'text-rose-500' : isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+                    }`}
+                  >
+                    {c.debt.toFixed(2)} €
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-1">
                 <Button
-                  variant="primary"
+                  variant="outline"
                   size="md"
                   className="flex-1"
                   onClick={() => {
                     setCust(c);
-                    setAction('pay');
-                    setAmount(c.debt);
-                    setAmountDraft(String(c.debt));
+                    setAction('balance');
+                    setAmount(10);
+                    setAmountDraft('10');
                     setPaymentMethod('efectivo');
                   }}
                 >
-                  Abonar
+                  + Cargar Saldo
                 </Button>
-              )}
+                {c.debt > 0 && (
+                  <Button
+                    variant="primary"
+                    size="md"
+                    className="flex-1"
+                    onClick={() => {
+                      setCust(c);
+                      setAction('pay');
+                      setAmount(c.debt);
+                      setAmountDraft(String(c.debt));
+                      setPaymentMethod('efectivo');
+                    }}
+                  >
+                    Abonar
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <WhatsAppReceiptModal isOpen={isReceiptOpen} onClose={() => setIsReceiptOpen(false)} customer={cust} />
+      <WhatsAppReceiptModal
+        isOpen={isReceiptOpen}
+        onClose={() => {
+          setIsReceiptOpen(false);
+          setLastAbonoAmount(null);
+        }}
+        customer={cust}
+        abonoAmount={lastAbonoAmount}
+      />
       <NewCustomerModal isOpen={isNewOpen} onClose={() => setIsNewOpen(false)} />
+      <EditCustomerModal
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        customer={cust}
+        onUpdated={(updated) => setCust(updated)}
+      />
 
       <Modal
         isOpen={!!action}

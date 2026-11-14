@@ -82,7 +82,7 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
     setIsSavingCustomer(true);
     try {
-      const res = await addCustomer(trimmedName, '', 'Congregación');
+      const res = await addCustomer(trimmedName, '', 'Congregación', '', '');
       if (res.success && res.customer) {
         setCustomerId(res.customer.id);
         setNewCustomerName('');
@@ -337,16 +337,18 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
             </p>
           )}
           <div className="flex gap-3 pt-3">
-            {customer && (
-              <a
-                href={getWhatsAppShareUrl(customer.phone, generateReceiptText(customer, sale))}
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 min-h-[52px] px-4 rounded-full bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-base flex items-center justify-center gap-2"
-              >
-                <Share2 className="w-5 h-5" /> Recibo WhatsApp
-              </a>
-            )}
+            <a
+              href={
+                sale.paymentMethod === 'fiado' && customer
+                  ? getWhatsAppShareUrl(customer.phone || '', generateReceiptText(customer, sale))
+                  : getWhatsAppShareUrl('', generateReceiptText(null, sale))
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 min-h-[52px] px-4 rounded-full bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-base flex items-center justify-center gap-2"
+            >
+              <Share2 className="w-5 h-5" /> Recibo WhatsApp
+            </a>
             <Button variant="primary" size="lg" className="flex-1" onClick={handleClose}>
               Listo
             </Button>

@@ -12,9 +12,15 @@ interface WhatsAppReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
   customer: CustomerTab | null;
+  abonoAmount?: number | null;
 }
 
-export const WhatsAppReceiptModal: React.FC<WhatsAppReceiptModalProps> = ({ isOpen, onClose, customer }) => {
+export const WhatsAppReceiptModal: React.FC<WhatsAppReceiptModalProps> = ({
+  isOpen,
+  onClose,
+  customer,
+  abonoAmount,
+}) => {
   const { t } = useLanguage();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -24,7 +30,7 @@ export const WhatsAppReceiptModal: React.FC<WhatsAppReceiptModalProps> = ({ isOp
 
   if (!customer) return null;
 
-  const receiptText = generateReceiptText(customer);
+  const receiptText = generateReceiptText(customer, null, abonoAmount);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(receiptText);
@@ -56,7 +62,7 @@ export const WhatsAppReceiptModal: React.FC<WhatsAppReceiptModalProps> = ({ isOp
             {copied ? 'Copiado' : t('tabs.copyReceipt')}
           </Button>
           <a
-            href={getWhatsAppShareUrl(customer.phone, receiptText)}
+            href={getWhatsAppShareUrl(customer.phone || '', receiptText)}
             target="_blank"
             rel="noreferrer"
             className="flex-1 min-h-[48px] px-4 rounded-full bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-sm flex items-center justify-center gap-2"

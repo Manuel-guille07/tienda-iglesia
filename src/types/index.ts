@@ -113,6 +113,8 @@ export interface CustomerTab {
   debt: number;    // Saldo adeudado
   movements: TabMovement[];
   churchGroup?: string;
+  congregation?: string;
+  ministry?: string;
 }
 
 export interface Incident {
