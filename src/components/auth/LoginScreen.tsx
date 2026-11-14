@@ -126,14 +126,48 @@ export const LoginScreen: React.FC = () => {
             : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
         }`}
       >
-        {/* Cabecera Arquitectónica ELARX */}
+        {/* Cabecera Arquitectónica El Chiringuito */}
         <div className="flex flex-col items-center mb-6 text-center">
           <div
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 font-serif text-xl font-bold tracking-tight ${
-              isDark ? 'bg-[#EFECE6] text-[#141210]' : 'bg-[#141210] text-[#FAF8F5]'
+            className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${
+              isDark ? 'bg-[#EFECE6] text-[#141210]' : 'bg-[#141210] text-[#EFECE6]'
             }`}
           >
-            EX
+            <svg
+              viewBox="0 0 64 64"
+              fill="none"
+              className="w-9 h-9"
+              aria-hidden="true"
+            >
+              <path d="M16 48H44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              <path
+                d="M19 25H41V34C41 40.0751 36.0751 45 30 45C23.9249 45 19 40.0751 19 34V25Z"
+                fill="currentColor"
+              />
+              <path
+                d="M41 27.5H44.5C47.5376 27.5 50 29.9624 50 33C50 36.0376 47.5376 38.5 44.5 38.5H41"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <ellipse
+                cx="30"
+                cy="34.5"
+                rx="4.2"
+                ry="5.8"
+                transform="rotate(-18 30 34.5)"
+                fill={isDark ? '#EFECE6' : '#141210'}
+              />
+              <path
+                d="M28.6 29.5C29.8 32.3 29.4 35.8 31.4 39.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+              <path d="M25 16.5C25 18.5 27 19 27 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M33 15C33 17.5 35 18.2 35 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">{t('app.title')}</h1>
           <p className={`text-sm mt-1 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>

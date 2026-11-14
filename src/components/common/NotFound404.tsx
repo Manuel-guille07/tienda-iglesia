@@ -1,36 +1,55 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuthStore } from '../../store/useAuthStore';
 import { ShoppingCart, LogIn, AlertOctagon, ArrowLeft } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export const NotFound404: React.FC = () => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
-      {/* Background ambient lighting */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl text-center flex flex-col items-center">
-        {/* Glowing 404 Badge */}
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 mb-6 shadow-lg shadow-indigo-500/10">
+    <div
+      className={`min-h-screen flex flex-col items-center justify-center p-6 transition-colors ${
+        isDark ? 'bg-[#0E0C0B] text-[#F4F0EA]' : 'bg-[#EFECE6] text-[#141210]'
+      }`}
+    >
+      <div
+        className={`relative w-full max-w-md border rounded-3xl p-8 shadow-xl text-center flex flex-col items-center ${
+          isDark
+            ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
+            : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
+        }`}
+      >
+        <div
+          className={`w-16 h-16 rounded-2xl border flex items-center justify-center mb-6 ${
+            isDark
+              ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA]'
+              : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]'
+          }`}
+        >
           <AlertOctagon className="w-8 h-8" />
         </div>
 
-        <div className="inline-block px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] font-mono text-indigo-400 uppercase tracking-widest mb-3">
+        <div
+          className={`inline-block px-3 py-1 rounded-full border text-[11px] font-mono uppercase tracking-widest mb-3 ${
+            isDark
+              ? 'bg-[#211D1A] border-[#2A2420] text-[#9A9086]'
+              : 'bg-[#EFECE6] border-[#E2DDD5] text-[#6E665E]'
+          }`}
+        >
           Error 404
         </div>
 
-        <h1 className="text-2xl font-bold text-white tracking-tight mb-2">
+        <h1 className="text-2xl font-bold tracking-tight mb-2">
           {t('404.title')}
         </h1>
-        <p className="text-xs text-slate-400 leading-relaxed mb-8 max-w-xs">
+        <p className={`text-xs leading-relaxed mb-8 max-w-xs ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
           {t('404.subtitle')}
         </p>
 
@@ -61,7 +80,7 @@ export const NotFound404: React.FC = () => {
           <Button
             variant="outline"
             size="md"
-            className="w-full justify-center text-xs text-slate-400"
+            className="w-full justify-center text-xs"
             icon={<ArrowLeft className="w-3.5 h-3.5" />}
             onClick={() => navigate(-1)}
           >
@@ -69,9 +88,13 @@ export const NotFound404: React.FC = () => {
           </Button>
         </div>
 
-        {/* ELARX Brand Stamp */}
-        <div className="mt-8 pt-4 border-t border-slate-800/80 w-full flex items-center justify-between text-[10px] text-slate-500 font-mono">
-          <span>ELARX SECURE POS</span>
+        {/* El Chiringuito Brand Stamp */}
+        <div
+          className={`mt-8 pt-4 border-t w-full flex items-center justify-between text-[10px] font-mono ${
+            isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#6E665E]'
+          }`}
+        >
+          <span>EL CHIRINGUITO POS</span>
           <span>HTTP_STATUS_404</span>
         </div>
       </div>

@@ -10,7 +10,17 @@ import { PaymentMethod, Sale } from '../../types';
 import { ChangeCalculator } from './ChangeCalculator';
 import { toCents, fromCents, roundMoney } from '../../utils/finance';
 import toast from 'react-hot-toast';
-import { CheckCircle, Share2, Banknote, CreditCard, BookOpen, Heart, Coffee } from 'lucide-react';
+import {
+  CheckCircle,
+  Share2,
+  Banknote,
+  CreditCard,
+  BookOpen,
+  Heart,
+  Coffee,
+  UserPlus,
+  X,
+} from 'lucide-react';
 
 export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { t } = useLanguage();
@@ -19,7 +29,14 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
 
   const { currentUser } = useAuthStore();
   const { cart, processSale, processDonationSale, isProcessingSale } = usePOSStore();
-  const { customers, chargeSaleToTab, generateReceiptText, getWhatsAppShareUrl } = useTabStore();
+  const {
+    customers,
+    addCustomer,
+    isMutatingTab,
+    chargeSaleToTab,
+    generateReceiptText,
+    getWhatsAppShareUrl,
+  } = useTabStore();
 
   const total = fromCents(
     cart.reduce((acc, item) => acc + toCents(item.product.price) * item.quantity, 0)
@@ -28,6 +45,9 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   const [method, setMethod] = useState<PaymentMethod>('efectivo');
   const [tendered, setTendered] = useState<number>(total);
   const [customerId, setCustomerId] = useState<string>(customers[0]?.id || '');
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState<boolean>(false);
+  const [newCustomerName, setNewCustomerName] = useState<string>('');
+  const [isSavingCustomer, setIsSavingCustomer] = useState<boolean>(false);
   const [donationSubMethod] = useState<'efectivo' | 'datafono'>('efectivo');
   const [notes, setNotes] = useState<string>('');
   const [sale, setSale] = useState<Sale | null>(null);
@@ -40,6 +60,8 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
     if (isOpen && !wasOpenRef.current) {
       setTendered(total);
       setIsSubmitting(false);
+      setIsCreatingCustomer(false);
+      setNewCustomerName('');
     }
     wasOpenRef.current = isOpen;
   }, [isOpen, total]);
@@ -49,6 +71,30 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
       setCustomerId(customers[0].id);
     }
   }, [isOpen, customers, customerId]);
+
+  const handleSaveNewCustomer = async () => {
+    const trimmedName = newCustomerName.trim();
+    if (!trimmedName) {
+      toast.error('Introduce el nombre del hermano/a');
+      return;
+    }
+    if (isSavingCustomer || isMutatingTab) return;
+
+    setIsSavingCustomer(true);
+    try {
+      const res = await addCustomer(trimmedName, '', 'Congregación');
+      if (res.success && res.customer) {
+        setCustomerId(res.customer.id);
+        setNewCustomerName('');
+        setIsCreatingCustomer(false);
+        toast.success(`Hermano/a "${res.customer.name}" añadido y seleccionado`);
+      } else {
+        toast.error(res.error || 'No se pudo registrar al nuevo hermano/a');
+      }
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
 
   const busy = isSubmitting || isProcessingSale;
   const customer = customers.find((c) => c.id === customerId);
@@ -256,11 +302,13 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   };
 
   const handleClose = () => {
-    if (busy) return;
+    if (busy || isSavingCustomer) return;
     setSale(null);
     setDonatedChange(null);
     setNotes('');
     setIsSubmitting(false);
+    setIsCreatingCustomer(false);
+    setNewCustomerName('');
     onClose();
   };
 
@@ -423,28 +471,113 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
                   : 'bg-amber-500/12 border-amber-600/25 text-amber-950'
               }`}
             >
-              <label className="text-sm font-semibold block">Seleccionar Hermano / Cliente</label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-sm font-semibold block">Seleccionar Hermano / Cliente</label>
+                {!isCreatingCustomer && (
+                  <button
+                    type="button"
+                    disabled={busy || isSavingCustomer}
+                    onClick={() => {
+                      setIsCreatingCustomer(true);
+                      setNewCustomerName('');
+                    }}
+                    className={`min-h-[36px] px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer select-none ${
+                      isDark
+                        ? 'bg-[#171412]/90 border-amber-400/40 text-amber-100 hover:bg-[#211D1A]'
+                        : 'bg-[#FAF8F5] border-amber-800/30 text-amber-950 hover:bg-[#EFECE6]'
+                    }`}
+                  >
+                    <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span>+ Nuevo Hermano</span>
+                  </button>
+                )}
+              </div>
+
               <select
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
+                disabled={busy || isSavingCustomer}
                 className={`w-full min-h-[48px] rounded-xl px-3 text-base font-medium border ${
                   isDark
                     ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
                     : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
                 }`}
               >
-                {customers.map((c) => {
-                  const custCredit =
-                    Math.max(0, Number(c.balance || 0)) +
-                    (Number(c.debt || 0) < 0 ? Math.abs(Number(c.debt || 0)) : 0);
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.churchGroup}) · Saldo: {custCredit.toFixed(2)} €
-                      {c.debt > 0 ? ` · Deuda: ${c.debt.toFixed(2)} €` : ''}
-                    </option>
-                  );
-                })}
+                {customers.length === 0 ? (
+                  <option value="">Sin hermanos registrados — crea uno nuevo</option>
+                ) : (
+                  customers.map((c) => {
+                    const custCredit =
+                      Math.max(0, Number(c.balance || 0)) +
+                      (Number(c.debt || 0) < 0 ? Math.abs(Number(c.debt || 0)) : 0);
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.churchGroup}) · Saldo: {custCredit.toFixed(2)} €
+                        {c.debt > 0 ? ` · Deuda: ${c.debt.toFixed(2)} €` : ''}
+                      </option>
+                    );
+                  })
+                )}
               </select>
+
+              {isCreatingCustomer && (
+                <div
+                  className={`p-3 rounded-xl border space-y-2 ${
+                    isDark
+                      ? 'bg-[#171412]/90 border-[#2A2420] text-[#F4F0EA]'
+                      : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold">Nuevo Hermano / Cliente</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreatingCustomer(false);
+                        setNewCustomerName('');
+                      }}
+                      aria-label="Cancelar creación de hermano"
+                      className={`p-1 rounded-lg transition cursor-pointer ${
+                        isDark ? 'text-[#9A9086] hover:text-[#F4F0EA]' : 'text-[#6E665E] hover:text-[#141210]'
+                      }`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={newCustomerName}
+                      onChange={(e) => setNewCustomerName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveNewCustomer();
+                        }
+                      }}
+                      placeholder="Nombre y apellido..."
+                      autoFocus
+                      disabled={isSavingCustomer}
+                      className={`flex-1 min-h-[44px] rounded-xl px-3.5 text-sm font-medium border focus:outline-none ${
+                        isDark
+                          ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] focus:border-[#EFECE6]'
+                          : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] focus:border-[#141210]'
+                      }`}
+                    />
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      disabled={isSavingCustomer || !newCustomerName.trim()}
+                      isLoading={isSavingCustomer}
+                      onClick={handleSaveNewCustomer}
+                      className="min-h-[44px] px-4 shrink-0"
+                    >
+                      Guardar
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {customer && availableCredit > 0 && (
                 <div

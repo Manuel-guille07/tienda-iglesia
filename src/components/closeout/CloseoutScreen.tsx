@@ -388,100 +388,140 @@ export const CloseoutScreen: React.FC = () => {
       )}
 
       {/* Tarjetas KPI de Turno */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <div
-          className={`p-4 rounded-3xl border transition-colors ${
+          className={`p-4 rounded-3xl border flex flex-col justify-between transition-colors ${
             isDark
               ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-100'
               : 'bg-emerald-500/12 border-emerald-600/25 text-emerald-950'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-xs font-semibold ${isDark ? 'text-emerald-200' : 'text-emerald-900'}`}>
-              Efectivo Esperado
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-semibold ${isDark ? 'text-emerald-200' : 'text-emerald-900'}`}>
+                Efectivo Esperado
+              </span>
+              <Banknote className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-300' : 'text-emerald-800'}`} />
+            </div>
+            <span className="text-2xl font-bold tabular-nums block mt-1.5">
+              {expectedCash.toFixed(2)} €
             </span>
-            <Banknote className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-300' : 'text-emerald-800'}`} />
           </div>
-          <span className="text-2xl font-bold tabular-nums block mt-1.5">
-            {expectedCash.toFixed(2)} €
+          <span
+            className={`text-xs text-surface-500 whitespace-normal break-words leading-snug block mt-1.5 tabular-nums ${
+              isDark ? 'text-emerald-200/90' : 'text-emerald-900'
+            }`}
+          >
+            Ventas {salesCash.toFixed(2)}€
+            {tabPaymentsCash > 0 ? ` + Abonos ${tabPaymentsCash.toFixed(2)}€` : ''}
+            {donativosCash > 0 ? ` + Donativos ${donativosCash.toFixed(2)}€` : ''}
           </span>
-          {(tabPaymentsCash > 0 || donativosCash > 0) && (
-            <span className={`text-xs block mt-1 truncate ${isDark ? 'text-emerald-200/80' : 'text-emerald-900'}`}>
-              Vtas: {salesCash.toFixed(2)} €
-              {tabPaymentsCash > 0 ? ` · Abonos: +${tabPaymentsCash.toFixed(2)} €` : ''}
-              {donativosCash > 0 ? ` · Don.: +${donativosCash.toFixed(2)} €` : ''}
-            </span>
-          )}
         </div>
 
         <div
-          className={`p-4 rounded-3xl border transition-colors ${
+          className={`p-4 rounded-3xl border flex flex-col justify-between transition-colors ${
             isDark
               ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-100'
               : 'bg-indigo-500/12 border-indigo-600/25 text-indigo-950'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-xs font-semibold ${isDark ? 'text-indigo-200' : 'text-indigo-900'}`}>
-              Datáfono Total
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-semibold ${isDark ? 'text-indigo-200' : 'text-indigo-900'}`}>
+                Datáfono Total
+              </span>
+              <CreditCard className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-300' : 'text-indigo-800'}`} />
+            </div>
+            <span className="text-2xl font-bold tabular-nums block mt-1.5">
+              {totalCard.toFixed(2)} €
             </span>
-            <CreditCard className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-300' : 'text-indigo-800'}`} />
           </div>
-          <span className="text-2xl font-bold tabular-nums block mt-1.5">
-            {totalCard.toFixed(2)} €
+          <span
+            className={`text-xs text-surface-500 whitespace-normal break-words leading-snug block mt-1.5 tabular-nums ${
+              isDark ? 'text-indigo-200/90' : 'text-indigo-900'
+            }`}
+          >
+            Ventas {salesCard.toFixed(2)}€
+            {tabPaymentsCard > 0 ? ` + Abonos ${tabPaymentsCard.toFixed(2)}€` : ''}
+            {donativosCard > 0 ? ` + Donativos ${donativosCard.toFixed(2)}€` : ''}
           </span>
         </div>
 
         <div
-          className={`p-4 rounded-3xl border transition-colors ${
+          className={`p-4 rounded-3xl border flex flex-col justify-between transition-colors ${
             isDark
               ? 'bg-amber-500/15 border-amber-500/30 text-amber-100'
               : 'bg-amber-500/12 border-amber-600/25 text-amber-950'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-xs font-semibold ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
-              Nuevos Fiados
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-semibold ${isDark ? 'text-amber-200' : 'text-amber-900'}`}>
+                Nuevos Fiados
+              </span>
+              <BookOpen className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-300' : 'text-amber-800'}`} />
+            </div>
+            <span className="text-2xl font-bold tabular-nums block mt-1.5">
+              {totalFiados.toFixed(2)} €
             </span>
-            <BookOpen className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-300' : 'text-amber-800'}`} />
           </div>
-          <span className="text-2xl font-bold tabular-nums block mt-1.5">
-            {totalFiados.toFixed(2)} €
+          <span
+            className={`text-xs text-surface-500 whitespace-normal break-words leading-snug block mt-1.5 tabular-nums ${
+              isDark ? 'text-amber-200/90' : 'text-amber-900'
+            }`}
+          >
+            {prepaidTabsUsed > 0
+              ? `Consumo ${totalFiadosGross.toFixed(2)}€ - Saldos previstos ${prepaidTabsUsed.toFixed(2)}€`
+              : `Consumo neto en cuenta: ${totalFiados.toFixed(2)}€`}
           </span>
-          {prepaidTabsUsed > 0 && (
-            <span className={`text-xs block mt-1 truncate ${isDark ? 'text-amber-200/80' : 'text-amber-900'}`}>
-              Consumo: {totalFiadosGross.toFixed(2)} € · Saldo previo: -{prepaidTabsUsed.toFixed(2)} €
-            </span>
-          )}
         </div>
 
         <div
-          className={`p-4 rounded-3xl border transition-colors ${
+          className={`p-4 rounded-3xl border flex flex-col justify-between transition-colors ${
             isDark
               ? 'bg-purple-500/15 border-purple-500/30 text-purple-100'
               : 'bg-purple-500/12 border-purple-600/25 text-purple-950'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-xs font-semibold ${isDark ? 'text-purple-200' : 'text-purple-900'}`}>
-              Donativos
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-semibold ${isDark ? 'text-purple-200' : 'text-purple-900'}`}>
+                Donativos
+              </span>
+              <Heart className={`w-4 h-4 shrink-0 ${isDark ? 'text-purple-300' : 'text-purple-800'}`} />
+            </div>
+            <span className="text-2xl font-bold tabular-nums block mt-1.5">
+              {totalDonativos.toFixed(2)} €
             </span>
-            <Heart className={`w-4 h-4 shrink-0 ${isDark ? 'text-purple-300' : 'text-purple-800'}`} />
           </div>
-          <span className="text-2xl font-bold tabular-nums block mt-1.5">
-            {totalDonativos.toFixed(2)} €
+          <span
+            className={`text-xs text-surface-500 whitespace-normal break-words leading-snug block mt-1.5 tabular-nums ${
+              isDark ? 'text-purple-200/90' : 'text-purple-900'
+            }`}
+          >
+            Efectivo {donativosCash.toFixed(2)}€
+            {donativosCard > 0 ? ` + Datáfono ${donativosCard.toFixed(2)}€` : ''}
           </span>
         </div>
 
-        <div className={`p-4 rounded-3xl border col-span-2 sm:col-span-1 transition-colors ${cardSurface}`}>
-          <div className="flex items-center justify-between gap-2">
-            <span className={`text-xs font-semibold ${isDark ? 'text-[#9A9086]' : 'text-[#141210]'}`}>
-              Cafés Servidos
+        <div className={`p-4 rounded-3xl border flex flex-col justify-between transition-colors ${cardSurface}`}>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-semibold ${isDark ? 'text-[#9A9086]' : 'text-[#141210]'}`}>
+                Cafés Servidos
+              </span>
+              <Coffee className={`w-4 h-4 shrink-0 ${isDark ? 'text-[#9A9086]' : 'text-[#141210]'}`} />
+            </div>
+            <span className="text-2xl font-bold tabular-nums block mt-1.5">
+              {totalCoffees}
             </span>
-            <Coffee className={`w-4 h-4 shrink-0 ${isDark ? 'text-[#9A9086]' : 'text-[#141210]'}`} />
           </div>
-          <span className="text-2xl font-bold tabular-nums block mt-1.5">
-            {totalCoffees}
+          <span
+            className={`text-xs text-surface-500 whitespace-normal break-words leading-snug block mt-1.5 tabular-nums ${
+              isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
+            }`}
+          >
+            Importe cafés: {totalCafes.toFixed(2)}€
           </span>
         </div>
       </div>
@@ -496,72 +536,72 @@ export const CloseoutScreen: React.FC = () => {
               Separación Contable del Turno
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
-              <div className={`p-4 rounded-2xl border flex items-center justify-between ${innerSurface}`}>
-                <div className="flex items-center gap-2.5">
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${innerSurface}`}>
+                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                       isDark ? 'bg-[#2A2420] text-[#F4F0EA]' : 'bg-[#E5E0D8] text-[#141210]'
                     }`}
                   >
                     <Coffee className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="text-xs font-bold block">Total Cafés</span>
-                    <span className={`text-[11px] ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold block whitespace-normal break-words">Total Cafés</span>
+                    <span className={`text-xs text-surface-500 whitespace-normal break-words block ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
                       Categoría Cafés ({totalCoffees} uds.)
                     </span>
                   </div>
                 </div>
-                <span className="text-xl font-bold font-mono tabular-nums">
+                <span className="text-xl font-bold font-mono tabular-nums shrink-0">
                   {totalCafes.toFixed(2)} €
                 </span>
               </div>
 
-              <div className={`p-4 rounded-2xl border flex items-center justify-between ${innerSurface}`}>
-                <div className="flex items-center gap-2.5">
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${innerSurface}`}>
+                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                       isDark ? 'bg-[#2A2420] text-[#F4F0EA]' : 'bg-[#E5E0D8] text-[#141210]'
                     }`}
                   >
                     <ShoppingBag className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="text-xs font-bold block">Total Resto de Cafetería</span>
-                    <span className={`text-[11px] ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold block whitespace-normal break-words">Total Resto de Cafetería</span>
+                    <span className={`text-xs text-surface-500 whitespace-normal break-words block ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
                       Bebidas, snacks y otros artículos
                     </span>
                   </div>
                 </div>
-                <span className="text-xl font-bold font-mono tabular-nums">
+                <span className="text-xl font-bold font-mono tabular-nums shrink-0">
                   {totalRestoCafeteria.toFixed(2)} €
                 </span>
               </div>
 
-              <div className={`p-4 rounded-2xl border flex items-center justify-between ${innerSurface}`}>
-                <div className="flex items-center gap-2.5">
+              <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${innerSurface}`}>
+                <div className="flex items-start sm:items-center gap-2.5 min-w-0">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                       isDark ? 'bg-[#2A2420] text-[#F4F0EA]' : 'bg-[#E5E0D8] text-[#141210]'
                     }`}
                   >
                     <Banknote className="w-4 h-4" />
                   </div>
-                  <div>
-                    <span className="text-xs font-bold block">Abonos Recibidos (Deudas previas)</span>
-                    <span className={`text-[11px] ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
-                      Pagos de deudas (Efec.: {tabPaymentsCash.toFixed(2)} € · Dat.: {tabPaymentsCard.toFixed(2)} €)
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold block whitespace-normal break-words">Abonos Recibidos (Deudas previas)</span>
+                    <span className={`text-xs text-surface-500 whitespace-normal break-words block ${isDark ? 'text-[#9A9086]' : 'text-[#3D352F]'}`}>
+                      Pagos de deudas (Efectivo: {tabPaymentsCash.toFixed(2)} € · Datáfono: {tabPaymentsCard.toFixed(2)} €)
                     </span>
                   </div>
                 </div>
-                <span className="text-xl font-bold font-mono tabular-nums">
+                <span className="text-xl font-bold font-mono tabular-nums shrink-0">
                   {totalTabPayments.toFixed(2)} €
                 </span>
               </div>
             </div>
           </div>
 
-          <p className={`text-xs mt-4 pt-3 border-t ${isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#141210]'}`}>
+          <p className={`text-xs text-surface-500 whitespace-normal break-words mt-4 pt-3 border-t ${isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#141210]'}`}>
             Desglose automático sobre las ventas activas y abonos recibidos del turno.
           </p>
         </div>
@@ -569,7 +609,7 @@ export const CloseoutScreen: React.FC = () => {
         {/* Resumen de Artículos para Cuadre de Stock Físico */}
         <div className={`lg:col-span-7 border rounded-3xl p-5 flex flex-col justify-between ${cardSurface}`}>
           <div>
-            <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 className="text-sm font-bold tracking-tight flex items-center gap-2">
                 <PackageCheck className="w-4 h-4" />
                 Resumen de Artículos
@@ -592,10 +632,10 @@ export const CloseoutScreen: React.FC = () => {
                 {soldItemsSummary.map((item) => (
                   <div
                     key={`${item.name}-${item.category || ''}`}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-2xl border text-xs ${innerSurface}`}
+                    className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-2xl border text-xs ${innerSurface}`}
                   >
                     <div className="min-w-0 pr-2">
-                      <p className="font-semibold truncate">
+                      <p className="font-semibold whitespace-normal break-words">
                         <span className="font-mono font-bold">{item.quantity} ×</span> {item.name}
                       </p>
                       {item.category && (
@@ -613,7 +653,7 @@ export const CloseoutScreen: React.FC = () => {
             )}
           </div>
 
-          <p className={`text-xs mt-4 pt-3 border-t ${isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#141210]'}`}>
+          <p className={`text-xs text-surface-500 whitespace-normal break-words mt-4 pt-3 border-t ${isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#141210]'}`}>
             Resumen consolidado para facilitar el cuadre de inventario físico gastado.
           </p>
         </div>

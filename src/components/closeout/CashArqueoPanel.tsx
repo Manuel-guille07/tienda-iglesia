@@ -53,34 +53,32 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
       <h3 className="text-lg font-semibold tracking-tight">Arqueo de Efectivo Físico</h3>
 
       <div
-        className={`p-4 rounded-2xl border space-y-2 ${
+        className={`p-4 rounded-2xl border space-y-2.5 ${
           isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
         }`}
       >
-        <div className="flex justify-between items-center text-sm">
-          <span className="font-medium">Efectivo total esperado en caja:</span>
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-sm">
+          <span className="font-medium whitespace-normal break-words">Efectivo total esperado en caja:</span>
           <strong className="text-lg font-bold tabular-nums">{expectedCash.toFixed(2)} €</strong>
         </div>
 
         <div
-          className={`pt-2 border-t text-xs space-y-1 ${
+          className={`pt-2 border-t flex flex-col gap-1.5 text-xs text-surface-500 whitespace-normal break-words ${
             isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#6E665E]'
           }`}
         >
-          <div className="flex justify-between">
-            <span>• Ventas de Hoy (Efectivo):</span>
+          <div className="flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5">
+            <span className="whitespace-normal break-words">• Ventas de Hoy (Efectivo):</span>
             <span className="font-medium tabular-nums">{salesCash.toFixed(2)} €</span>
           </div>
-          <div className="flex justify-between">
-            <span>• Abonos Recibidos (Deudas previas):</span>
+          <div className="flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5">
+            <span className="whitespace-normal break-words">• Abonos Recibidos (Deudas previas):</span>
             <span className="font-medium tabular-nums">+{tabPaymentsCash.toFixed(2)} €</span>
           </div>
-          {donativosCash > 0 && (
-            <div className="flex justify-between">
-              <span>• Donativos en efectivo:</span>
-              <span className="font-medium tabular-nums">+{donativosCash.toFixed(2)} €</span>
-            </div>
-          )}
+          <div className="flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5">
+            <span className="whitespace-normal break-words">• Donativos en efectivo:</span>
+            <span className="font-medium tabular-nums">+{donativosCash.toFixed(2)} €</span>
+          </div>
         </div>
       </div>
 

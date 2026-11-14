@@ -2,7 +2,7 @@ import { Language } from '../../types';
 
 export const esDict = {
   // Global & Nav
-  'app.title': 'ELARX POS',
+  'app.title': 'El Chiringuito',
   'app.tagline': 'Point of Sale & Retail Management',
   'nav.pos': 'Cobro (POS)',
   'nav.dashboard': 'Dashboard Analítico',
@@ -219,7 +219,7 @@ export const esDict = {
 
 export const enDict: Record<keyof typeof esDict, string> = {
   // Global & Nav
-  'app.title': 'ELARX POS',
+  'app.title': 'El Chiringuito',
   'app.tagline': 'Point of Sale & Retail Management',
   'nav.pos': 'Register (POS)',
   'nav.dashboard': 'Analytics Dashboard',

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="18" fill="#141210" />
+  <rect x="3" y="3" width="58" height="58" rx="15" stroke="#EFECE6" stroke-opacity="0.16" stroke-width="1" />
+  <!-- Plinto / Plato arquitectónico -->
+  <path d="M16 48H44" stroke="#EFECE6" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Taza minimalista de trazos limpios -->
+  <path d="M19 25H41V34C41 40.0751 36.0751 45 30 45C23.9249 45 19 40.0751 19 34V25Z" fill="#EFECE6" />
+  <!-- Asa geométrica -->
+  <path d="M41 27.5H44.5C47.5376 27.5 50 29.9624 50 33C50 36.0376 47.5376 38.5 44.5 38.5H41" stroke="#EFECE6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Grano de café geométrico negativo en el centro de la taza -->
+  <ellipse cx="30" cy="34.5" rx="4.2" ry="5.8" transform="rotate(-18 30 34.5)" fill="#141210" />
+  <path d="M28.6 29.5C29.8 32.3 29.4 35.8 31.4 39.5" stroke="#EFECE6" stroke-width="1.5" stroke-linecap="round" />
+  <!-- Vapor sutil arquitectónico -->
+  <path d="M25 16.5C25 18.5 27 19 27 21" stroke="#EFECE6" stroke-width="2" stroke-linecap="round" />
+  <path d="M33 15C33 17.5 35 18.2 35 21" stroke="#EFECE6" stroke-width="2" stroke-linecap="round" />
+</svg>

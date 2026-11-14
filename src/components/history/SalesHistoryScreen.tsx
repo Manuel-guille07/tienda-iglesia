@@ -278,7 +278,7 @@ export const SalesHistoryScreen: React.FC = () => {
                     : 'bg-[#E5E0D8] text-[#141210] border-[#D6CFC5]'
                 }`}
               >
-                ELARX Ledger
+                El Chiringuito
               </span>
             </h1>
             <p className={`text-xs ${subtleText}`}>{t('history.subtitle')}</p>

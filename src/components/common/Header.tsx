@@ -45,20 +45,54 @@ export const Header: React.FC = () => {
       } backdrop-blur-md`}
     >
       <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-2 min-w-0">
-        {/* Fila Superior Izquierda: Logo ELARX */}
+        {/* Fila Superior Izquierda: Logo El Chiringuito */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
           <div
-            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 font-serif text-sm sm:text-base font-bold tracking-tight ${
+            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${
               isDark
                 ? 'bg-[#EFECE6] text-[#141210]'
-                : 'bg-[#141210] text-[#FAF8F5]'
+                : 'bg-[#141210] text-[#EFECE6]'
             }`}
           >
-            EX
+            <svg
+              viewBox="0 0 64 64"
+              fill="none"
+              className="w-6 h-6 sm:w-7 sm:h-7"
+              aria-hidden="true"
+            >
+              <path d="M16 48H44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              <path
+                d="M19 25H41V34C41 40.0751 36.0751 45 30 45C23.9249 45 19 40.0751 19 34V25Z"
+                fill="currentColor"
+              />
+              <path
+                d="M41 27.5H44.5C47.5376 27.5 50 29.9624 50 33C50 36.0376 47.5376 38.5 44.5 38.5H41"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <ellipse
+                cx="30"
+                cy="34.5"
+                rx="4.2"
+                ry="5.8"
+                transform="rotate(-18 30 34.5)"
+                fill={isDark ? '#EFECE6' : '#141210'}
+              />
+              <path
+                d="M28.6 29.5C29.8 32.3 29.4 35.8 31.4 39.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+              <path d="M25 16.5C25 18.5 27 19 27 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M33 15C33 17.5 35 18.2 35 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
           </div>
           <div className="min-w-0">
-            <span className="text-base sm:text-lg font-semibold tracking-tight block leading-none">
-              ELARX
+            <span className="text-sm sm:text-lg font-semibold tracking-tight block leading-none truncate">
+              El Chiringuito
             </span>
             <span
               className={`hidden sm:block text-xs font-medium mt-1 ${

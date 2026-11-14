@@ -162,7 +162,7 @@ export function exportSalesHistoryToCSV(
   tabPayments: TabPaymentExport[] = []
 ) {
   const dateStr = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
-  const filename = `elarx-reporte-contable-${dateStr}.csv`;
+  const filename = `el-chiringuito-reporte-contable-${dateStr}.csv`;
 
   const totalAmount = fromCents(
     sales
@@ -207,7 +207,7 @@ export function exportSalesHistoryToCSV(
     calculateSalesAccountingBreakdown(sales);
 
   const rows: (string | number)[][] = [
-    ['ELARX POS - REPORTE CONTABLE DE VENTAS Y AUDITORÍA'],
+    ['EL CHIRINGUITO POS - REPORTE CONTABLE DE VENTAS Y AUDITORÍA'],
     ['Fecha de Emisión', new Date().toLocaleString('es-ES')],
     ['Periodo / Filtro', periodLabel],
     [''],
@@ -351,7 +351,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Vista Imprimible Contable (PDF) - ELARX POS">
+    <Modal isOpen={isOpen} onClose={onClose} title="Vista Imprimible Contable (PDF) - El Chiringuito">
       <div className="space-y-4">
         {/* Action Toolbar */}
         <div
@@ -403,7 +403,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 bg-[#141210] text-white font-black text-xs tracking-wider rounded">
-                  ELARX POS
+                  EL CHIRINGUITO
                 </span>
                 <span className="text-xs font-semibold text-[#3D352F] uppercase tracking-wider">
                   Reporte Oficial de Contabilidad y Tesorería
@@ -596,7 +596,7 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
 
           {/* Signature Footer */}
           <div className="mt-6 pt-4 border-t border-[#E2DDD5] flex items-center justify-between text-[11px] text-[#3D352F]">
-            <span>Generado por ELARX POS v1.2 Core</span>
+            <span>Generado por El Chiringuito POS</span>
             <span>Firma Tesorería / Supervisión: ______________________</span>
           </div>
         </div>

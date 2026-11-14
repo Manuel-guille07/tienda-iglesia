@@ -1,17 +1,26 @@
 {
-  "short_name": "POS Iglesia",
-  "name": "Chiringuito & Cafetería Iglesia POS",
+  "id": "/",
+  "short_name": "Chiringuito",
+  "name": "El Chiringuito POS",
   "icons": [
+    {
+      "src": "/vite.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any"
+    },
     {
       "src": "/coffee-icon.svg",
       "type": "image/svg+xml",
-      "sizes": "192x192 512x512"
+      "sizes": "192x192 512x512",
+      "purpose": "any"
     }
   ],
   "start_url": "/",
-  "background_color": "#0f172a",
-  "theme_color": "#4f46e5",
+  "scope": "/",
+  "background_color": "#141210",
+  "theme_color": "#141210",
   "display": "standalone",
   "orientation": "any",
-  "description": "Sistema de Punto de Venta y Gestión de Cafetería de la Iglesia"
+  "description": "Sistema de Punto de Venta y Gestión de El Chiringuito"
 }
