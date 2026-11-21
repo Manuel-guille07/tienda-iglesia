@@ -33,6 +33,12 @@ import {
   PrintableReportModal,
   calculateSalesAccountingBreakdown,
 } from '../common/PrintableReportModal';
+import { isUserAdminOrSupervisor } from '../common/Navigation';
+import {
+  buildCloseoutSheetsPayload,
+  isGoogleSheetsConfigured,
+  syncCloseoutToSheets,
+} from '../../services/googleSheets';
 import toast from 'react-hot-toast';
 
 export const CloseoutScreen: React.FC = () => {
@@ -68,7 +74,10 @@ export const CloseoutScreen: React.FC = () => {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [selectedHistoricalIndex, setSelectedHistoricalIndex] = useState<number | null>(null);
   const [isClosingShift, setIsClosingShift] = useState(false);
+  const [sendingCloseoutIds, setSendingCloseoutIds] = useState<string[]>([]);
   const closingLock = isClosingShift || isStoreClosingShift;
+  const canSendHistoricalToSheets =
+    isUserAdminOrSupervisor(currentUser?.role) && isGoogleSheetsConfigured();
 
   const lastClose = shiftCloses[0];
   const latestCloseMs = Math.max(
@@ -324,6 +333,35 @@ export const CloseoutScreen: React.FC = () => {
       ? selectedHistoricalClose.totalFiados
       : calculateShiftTabBreakdown(historicalSales, tabCredits).netFiados
     : 0;
+
+  const handleSendHistoricalToSheets = async (close: ShiftClose, idx: number) => {
+    if (!canSendHistoricalToSheets || sendingCloseoutIds.includes(close.id)) return;
+
+    setSendingCloseoutIds((prev) => [...prev, close.id]);
+    try {
+      const closeSales = getHistoricalCloseSales(close, idx);
+      const resolvedFiadosNuevos =
+        close.totalFiados > 0
+          ? close.totalFiados
+          : calculateShiftTabBreakdown(closeSales, tabCredits).netFiados;
+
+      const payload = buildCloseoutSheetsPayload({
+        ...close,
+        totalFiados: resolvedFiadosNuevos,
+      });
+
+      const result = await syncCloseoutToSheets(payload);
+      if (result.success) {
+        toast.success('Cierre sincronizado con Google Sheets');
+      } else if (!result.skipped) {
+        toast('No se pudo enviar el cierre a Google Sheets. Inténtalo de nuevo más tarde.', {
+          icon: '⚠️',
+        });
+      }
+    } finally {
+      setSendingCloseoutIds((prev) => prev.filter((id) => id !== close.id));
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
@@ -757,17 +795,33 @@ export const CloseoutScreen: React.FC = () => {
                     {close.totalCard.toFixed(2)} €
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={<Printer className="w-3.5 h-3.5" />}
-                  onClick={() => {
-                    setSelectedHistoricalIndex(idx);
-                    setPdfModalOpen(true);
-                  }}
-                >
-                  Ver Ticket
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {canSendHistoricalToSheets && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Enviar a Google Sheets"
+                      aria-label="Enviar cierre a Google Sheets"
+                      disabled={sendingCloseoutIds.includes(close.id)}
+                      isLoading={sendingCloseoutIds.includes(close.id)}
+                      icon={<FileSpreadsheet className="w-3.5 h-3.5" />}
+                      onClick={() => handleSendHistoricalToSheets(close, idx)}
+                    >
+                      <span className="hidden sm:inline">Enviar a Sheets</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<Printer className="w-3.5 h-3.5" />}
+                    onClick={() => {
+                      setSelectedHistoricalIndex(idx);
+                      setPdfModalOpen(true);
+                    }}
+                  >
+                    Ver Ticket
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
