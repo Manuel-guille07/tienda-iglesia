@@ -9,6 +9,11 @@ import {
   getTabPayments,
   getShiftSales,
 } from '../services/db';
+import {
+  buildCloseoutSheetsPayload,
+  isGoogleSheetsConfigured,
+  syncCloseoutToSheets,
+} from '../services/googleSheets';
 import { usePOSStore } from './usePOSStore';
 import { fromCents, toCents } from '../utils/finance';
 import toast from 'react-hot-toast';
@@ -549,7 +554,7 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
         ...closeData,
         id: finalId,
         timestamp: effectiveTs,
-        exportStatus: 'synced',
+        exportStatus: isGoogleSheetsConfigured() ? 'pending' : 'synced',
       };
 
       set((state) => {
@@ -567,6 +572,26 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
           shiftSales: [],
         };
       });
+
+      // Sincronización no bloqueante con Google Sheets tras guardar en Supabase
+      if (isGoogleSheetsConfigured()) {
+        const sheetsPayload = buildCloseoutSheetsPayload(confirmedClose);
+        void syncCloseoutToSheets(sheetsPayload).then((sheetsRes) => {
+          if (sheetsRes.skipped) return;
+          if (sheetsRes.success) {
+            set((state) => ({
+              shiftCloses: state.shiftCloses.map((c) =>
+                c.id === finalId ? { ...c, exportStatus: 'synced' } : c
+              ),
+            }));
+            toast.success('Cierre sincronizado con Google Sheets');
+          } else {
+            toast('Cierre guardado en Supabase, pero no se pudo sincronizar con Google Sheets', {
+              icon: '⚠️',
+            });
+          }
+        });
+      }
 
       return { success: true, closeout: confirmedClose };
     } catch (error: any) {
@@ -641,20 +666,46 @@ export const useCloseoutStore = create<CloseoutState>((set, get) => ({
   },
 
   exportToGoogleSheets: async (shiftCloseId) => {
+    if (!isGoogleSheetsConfigured()) {
+      return {
+        success: false,
+        message: 'Webhook de Google Sheets no configurado en este entorno',
+      };
+    }
+
+    const targetClose =
+      get().shiftCloses.find((c) => c.id === shiftCloseId) || get().shiftCloses[0];
+    if (!targetClose) {
+      return {
+        success: false,
+        message: 'No hay ningún cierre registrado para enviar a Google Sheets',
+      };
+    }
+
     set({ isSyncingSheets: true });
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    try {
+      const payload = buildCloseoutSheetsPayload(targetClose);
+      const result = await syncCloseoutToSheets(payload);
 
-    set({
-      isSyncingSheets: false,
-      shiftCloses: get().shiftCloses.map((c) =>
-        c.id === shiftCloseId ? { ...c, exportStatus: 'synced' } : c
-      ),
-    });
+      if (result.success) {
+        set({
+          shiftCloses: get().shiftCloses.map((c) =>
+            c.id === targetClose.id ? { ...c, exportStatus: 'synced' } : c
+          ),
+        });
+        return {
+          success: true,
+          message: 'Cierre sincronizado con Google Sheets',
+        };
+      }
 
-    return {
-      success: true,
-      message: 'Sincronizado con la Hoja "Cierres-Cafetería-2026" en Google Drive',
-    };
+      return {
+        success: false,
+        message: 'No se pudo enviar el cierre a Google Sheets. Inténtalo de nuevo más tarde.',
+      };
+    } finally {
+      set({ isSyncingSheets: false });
+    }
   },
 
   downloadCSV: (shiftClose, sales, tabPayments = []) => {

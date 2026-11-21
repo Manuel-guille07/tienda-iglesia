@@ -241,7 +241,7 @@ export const CloseoutScreen: React.FC = () => {
   const difference = fromCents(toCents(counted) - toCents(expectedCash));
 
   const getShift = () => ({
-    closedBy: currentUser?.name || 'Turno',
+    closedBy: currentUser?.name || currentUser?.email || 'Turno',
     role: currentUser?.role || 'Vendedor',
     expectedCash,
     actualCash: counted,
@@ -379,7 +379,11 @@ export const CloseoutScreen: React.FC = () => {
               if (isSyncingSheets) return;
               const targetId = shiftCloses[0]?.id || 'draft';
               const res = await exportToGoogleSheets(targetId);
-              toast.success(res.message);
+              if (res.success) {
+                toast.success(res.message);
+              } else {
+                toast(res.message, { icon: '⚠️' });
+              }
             }}
           >
             Sheets
