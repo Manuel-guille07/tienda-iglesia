@@ -75,8 +75,9 @@ export function buildCloseoutSheetsPayload(closeout: ShiftClose): GoogleSheetsCl
 
 /**
  * Envía el resumen de un cierre de caja al webhook de Google Apps Script.
- * Usa Content-Type 'text/plain;charset=utf-8' para evitar preflight CORS.
- * Nunca lanza excepciones: retorna siempre un resultado estructurado.
+ * Usa mode: 'no-cors' y Content-Type 'text/plain;charset=utf-8' para evitar bloqueos CORS.
+ * Al devolver una respuesta opaca (type === 'opaque', status === 0), si fetch completa
+ * sin lanzar excepción de red se considera enviado correctamente.
  */
 export async function syncCloseoutToSheets(
   payload: GoogleSheetsCloseoutPayload
@@ -90,8 +91,9 @@ export async function syncCloseoutToSheets(
   const timeoutId = setTimeout(() => controller.abort(), SHEETS_TIMEOUT_MS);
 
   try {
-    const response = await fetch(webhookUrl, {
+    await fetch(webhookUrl, {
       method: 'POST',
+      mode: 'no-cors',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
       },
@@ -99,29 +101,6 @@ export async function syncCloseoutToSheets(
       redirect: 'follow',
       signal: controller.signal,
     });
-
-    if (!response.ok) {
-      const errMsg = `HTTP ${response.status}`;
-      console.warn('[GoogleSheets] Respuesta no satisfactoria del webhook:', errMsg);
-      return { success: false, error: errMsg };
-    }
-
-    const rawText = await response.text().catch(() => '');
-    if (rawText) {
-      try {
-        const parsed = JSON.parse(rawText);
-        if (
-          parsed &&
-          (parsed.ok === false || parsed.success === false || parsed.status === 'error')
-        ) {
-          const errMsg = String(parsed.error || parsed.message || 'Error en Google Apps Script');
-          console.warn('[GoogleSheets] Webhook reportó error:', errMsg);
-          return { success: false, error: errMsg };
-        }
-      } catch {
-        // Respuesta en texto plano o HTML válido tras redirección de Apps Script
-      }
-    }
 
     return { success: true };
   } catch (err: any) {
