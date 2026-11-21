@@ -65,12 +65,12 @@ export const CartPanel: React.FC<{ onOpenPayment: () => void; isBottomSheet?: bo
             {cart.map((item) => (
               <motion.div
                 key={item.product.id}
-                layout
+                layout="position"
                 initial={{ opacity: 0, y: -8, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.14 } }}
+                exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14 } }}
                 transition={QL_SPRING_SNAPPY}
-                className="rounded-2xl p-3.5 border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)]"
+                className="will-change-transform rounded-2xl p-3.5 border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)]"
               >
                 <div className="flex items-center justify-between gap-2.5">
                   <div className="flex-1 min-w-0">

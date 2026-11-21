@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { usePOSStore, getProductStockInfo } from '../../store/usePOSStore';
-import { Product, QuickColor } from '../../types';
+import { Category, Product, QuickColor } from '../../types';
 import { SurfaceCard } from '../ui/SurfaceCard';
 import { formatCurrencyParts } from '../../utils/finance';
 import { QL_SPRING_TACTILE } from '../../lib/motion';
@@ -19,18 +19,10 @@ const TONE_CSS_VAR: Record<MineralTone, string> = {
   neutral: 'var(--ql-text-muted)',
 };
 
-function resolveProductTone(product: Product): MineralTone {
-  const rawColor = String(product.quickColor || product.quick_color || '')
-    .trim()
-    .toLowerCase() as QuickColor;
+const HEX_COLOR_REGEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-  if (rawColor === 'sage') return 'sage';
-  if (rawColor === 'slate') return 'slate';
-  if (rawColor === 'amber') return 'amber';
-  if (rawColor === 'mauve' || rawColor === 'plum') return 'plum';
-  if (rawColor === 'terracotta') return 'terracotta';
-
-  const cat = String(product.category || '')
+function resolveCategoryTone(category?: Category | string): MineralTone {
+  const cat = String(category || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -42,17 +34,111 @@ function resolveProductTone(product: Product): MineralTone {
   if (cat === 'snacks') return 'plum';
   if (cat === 'donativos') return 'terracotta';
   if (cat === 'merchandising') return 'slate';
-
-  if (rawColor.startsWith('#')) {
-    if (rawColor.includes('0596') || rawColor.includes('10b9') || rawColor.includes('16a3')) return 'sage';
-    if (rawColor.includes('0284') || rawColor.includes('2563') || rawColor.includes('0ea5')) return 'slate';
-    if (rawColor.includes('d977') || rawColor.includes('f59e') || rawColor.includes('ea58')) return 'amber';
-    if (rawColor.includes('7c3a') || rawColor.includes('9333') || rawColor.includes('8b5c')) return 'plum';
-    if (rawColor.includes('e11d') || rawColor.includes('dc26') || rawColor.includes('f43f')) return 'terracotta';
-  }
-
   return 'neutral';
 }
+
+/**
+ * Resuelve el color de acento (barra vertical 3 px + borde tintado sutil)
+ * priorizando el color HEX extraído de la imagen 3D / elegido, y respaldando
+ * en el tono mineral semántico de la categoría.
+ */
+export function resolveQuickAccentColor(
+  quickColor?: QuickColor,
+  category?: Category | string
+): string {
+  const raw = String(quickColor || '').trim();
+  if (HEX_COLOR_REGEX.test(raw)) {
+    if (raw.length === 4) {
+      return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`.toUpperCase();
+    }
+    return raw.toUpperCase();
+  }
+
+  const lower = raw.toLowerCase();
+  if (lower === 'sage') return TONE_CSS_VAR.sage;
+  if (lower === 'slate') return TONE_CSS_VAR.slate;
+  if (lower === 'amber') return TONE_CSS_VAR.amber;
+  if (lower === 'mauve' || lower === 'plum') return TONE_CSS_VAR.plum;
+  if (lower === 'terracotta') return TONE_CSS_VAR.terracotta;
+
+  return TONE_CSS_VAR[resolveCategoryTone(category)];
+}
+
+export interface QuickButtonPreviewProps {
+  name: string;
+  price: number;
+  category?: Category;
+  quickColor?: QuickColor;
+  imageUrl?: string;
+}
+
+/**
+ * Vista previa en vivo idéntica al Botón Rápido real (usada por super_admin al editar/subir imagen 3D).
+ */
+export const QuickButtonCardPreview: React.FC<QuickButtonPreviewProps> = ({
+  name,
+  price,
+  category,
+  quickColor,
+  imageUrl,
+}) => {
+  const accentColor = resolveQuickAccentColor(quickColor, category);
+  const priceParts = formatCurrencyParts(Number.isFinite(price) ? price : 0);
+  const cleanImg = (imageUrl || '').trim();
+  const hasImage = cleanImg.length > 0;
+
+  return (
+    <div
+      style={{
+        borderColor: `color-mix(in srgb, ${accentColor} 22%, var(--ql-hairline))`,
+      }}
+      className="relative overflow-hidden rounded-[14px] sm:rounded-2xl pl-4 pr-3 py-3 text-left flex flex-col justify-between min-h-[94px] sm:min-h-[104px] border bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-sm)] select-none"
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1.5 top-2.5 bottom-2.5 w-[3px] rounded-full"
+        style={{ backgroundColor: accentColor, opacity: 0.86 }}
+      />
+
+      {hasImage && (
+        <img
+          src={cleanImg}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute -right-2 -bottom-2 w-[66px] h-[66px] sm:w-[74px] sm:h-[74px] object-contain opacity-95 drop-shadow-[0_6px_10px_rgba(20,18,16,0.2)]"
+        />
+      )}
+
+      <div className="relative z-10 flex items-start justify-between gap-2 w-full">
+        <span
+          className={cn(
+            'text-[13.5px] sm:text-[14.5px] font-medium leading-snug tracking-tight line-clamp-2 text-[var(--ql-text-primary)]',
+            hasImage && 'pr-9'
+          )}
+        >
+          {name.trim() || 'Nombre del producto'}
+        </span>
+      </div>
+
+      <div
+        className={cn(
+          'relative z-10 flex items-end justify-between gap-2 w-full mt-2.5 pt-1',
+          hasImage && 'pr-12'
+        )}
+      >
+        <span className="ql-num text-[17px] sm:text-[19px] font-semibold leading-none text-[var(--ql-text-primary)]">
+          {priceParts.integer}
+          <span className="text-[0.76em] font-medium text-[var(--ql-text-secondary)]">
+            {priceParts.decimal}
+          </span>
+          <span className="text-[0.7em] font-medium text-[var(--ql-text-muted)] ml-0.5">
+            {priceParts.symbol}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+};
 
 export const QuickCafeteriaKeypad: React.FC = () => {
   const { products, rawMaterials, cart, addToCart } = usePOSStore();
@@ -84,7 +170,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
     }
     tapTimerRef.current = window.setTimeout(() => {
       setTappedId((prev) => (prev === product.id ? null : prev));
-    }, 200);
+    }, 180);
   };
 
   if (presets.length === 0) {
@@ -98,28 +184,29 @@ export const QuickCafeteriaKeypad: React.FC = () => {
   }
 
   return (
-    <SurfaceCard variant="elevated" padding="none" radius="xl" className="p-2.5 sm:p-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-2.5">
+    <SurfaceCard variant="elevated" padding="none" radius="xl" className="p-2 sm:p-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5">
         {presets.map((product) => {
           const stockInfo = getProductStockInfo(product, rawMaterials);
           const isOut = stockInfo.status === 'out';
           const isLow = stockInfo.status === 'low';
           const qtyInCart = getCartQuantity(product.id);
-          const tone = resolveProductTone(product);
-          const toneVar = TONE_CSS_VAR[tone];
+          const accentColor = resolveQuickAccentColor(
+            (product.quickColor || product.quick_color) as QuickColor | undefined,
+            product.category
+          );
           const priceParts = formatCurrencyParts(product.price);
           const isFlashing = tappedId === product.id;
           const imageUrl = (product.imageUrl || product.image_url || '').trim();
           const hasImage = imageUrl.length > 0;
 
-          // Borde sutilmente tintado al ~20% en el tono mineral (sin pintar el fondo)
           const tintedBorderStyle: React.CSSProperties | undefined =
-            !isOut && !isFlashing && tone !== 'neutral'
+            !isOut && !isFlashing
               ? {
                   borderColor:
                     qtyInCart > 0
-                      ? `color-mix(in srgb, ${toneVar} 42%, var(--ql-hairline-strong))`
-                      : `color-mix(in srgb, ${toneVar} 20%, var(--ql-hairline))`,
+                      ? `color-mix(in srgb, ${accentColor} 42%, var(--ql-hairline-strong))`
+                      : `color-mix(in srgb, ${accentColor} 20%, var(--ql-hairline))`,
                 }
               : undefined;
 
@@ -134,7 +221,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
               aria-label={`Añadir ${product.name}, ${priceParts.full}`}
               style={tintedBorderStyle}
               className={cn(
-                'group relative overflow-hidden rounded-[14px] sm:rounded-2xl pl-4 pr-3.5 py-3.5 text-left flex flex-col justify-between min-h-[104px] sm:min-h-[112px] border transition-colors duration-150 select-none ql-focus-ring',
+                'will-change-transform group relative overflow-hidden rounded-[14px] sm:rounded-2xl pl-4 pr-3 py-3 text-left flex flex-col justify-between min-h-[94px] sm:min-h-[104px] border transition-colors duration-150 select-none ql-focus-ring',
                 isOut
                   ? 'bg-[var(--ql-bg-card)]/60 border-[var(--ql-hairline)] text-[var(--ql-text-muted)] opacity-50 cursor-not-allowed'
                   : cn(
@@ -147,17 +234,17 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                     )
               )}
             >
-              {/* Barra vertical mineral izquierda de 3 px (identificador sobrio de categoría) */}
+              {/* Barra vertical izquierda de 3 px */}
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute left-1.5 top-3 bottom-3 w-[3px] rounded-full transition-opacity duration-150"
+                className="pointer-events-none absolute left-1.5 top-2.5 bottom-2.5 w-[3px] rounded-full transition-opacity duration-150"
                 style={{
-                  backgroundColor: isOut ? 'var(--ql-text-muted)' : toneVar,
-                  opacity: isOut ? 0.35 : qtyInCart > 0 ? 0.95 : 0.78,
+                  backgroundColor: isOut ? 'var(--ql-text-muted)' : accentColor,
+                  opacity: isOut ? 0.35 : qtyInCart > 0 ? 0.95 : 0.82,
                 }}
               />
 
-              {/* Slot opcional para imagen 3D recortada (PNG/WebP transparente) */}
+              {/* Imagen 3D recortada (PNG/WebP transparente) anclada a esquina inferior derecha */}
               {hasImage && (
                 <img
                   src={imageUrl}
@@ -165,7 +252,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                   aria-hidden="true"
                   loading="lazy"
                   className={cn(
-                    'pointer-events-none select-none absolute -right-2 -bottom-2 w-[70px] h-[70px] sm:w-[78px] sm:h-[78px] object-contain transition-transform duration-200',
+                    'pointer-events-none select-none absolute -right-2 -bottom-2 w-[66px] h-[66px] sm:w-[74px] sm:h-[74px] object-contain transition-transform duration-200 will-change-transform',
                     isOut
                       ? 'opacity-35 grayscale'
                       : 'opacity-95 drop-shadow-[0_6px_10px_rgba(20,18,16,0.2)] group-hover:scale-[1.04]'
@@ -173,12 +260,12 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                 />
               )}
 
-              {/* Fila superior (z-10): nombre máx. 2 líneas + badge vivo de cantidad */}
-              <div className="relative z-10 flex items-start justify-between gap-2 w-full">
+              {/* Fila superior (z-10): nombre despejado + badge vivo de cantidad */}
+              <div className="relative z-10 flex items-start justify-between gap-1.5 w-full">
                 <span
                   className={cn(
-                    'text-[14px] sm:text-[15px] font-medium leading-snug tracking-tight line-clamp-2 text-[var(--ql-text-primary)]',
-                    hasImage && 'pr-3'
+                    'text-[13.5px] sm:text-[14.5px] font-medium leading-snug tracking-tight line-clamp-2 text-[var(--ql-text-primary)]',
+                    hasImage && qtyInCart === 0 && 'pr-8'
                   )}
                 >
                   {product.name}
@@ -192,7 +279,7 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.72, opacity: 0 }}
                       transition={QL_SPRING_TACTILE}
-                      className="shrink-0 min-w-[24px] h-[22px] px-1.5 rounded-full inline-flex items-center justify-center text-[11px] font-semibold ql-num bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-sm)]"
+                      className="will-change-transform shrink-0 min-w-[23px] h-[21px] px-1.5 rounded-full inline-flex items-center justify-center text-[11px] font-semibold ql-num bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-sm)]"
                     >
                       ×{qtyInCart}
                     </motion.span>
@@ -200,16 +287,16 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                 </AnimatePresence>
               </div>
 
-              {/* Fila inferior (z-10): precio editorial tabular-nums + aviso discreto de stock */}
+              {/* Fila inferior (z-10): precio editorial despejado a la izquierda */}
               <div
                 className={cn(
-                  'relative z-10 flex items-end justify-between gap-2 w-full mt-3 pt-1',
+                  'relative z-10 flex items-end justify-between gap-2 w-full mt-2.5 pt-0.5',
                   hasImage && 'pr-12'
                 )}
               >
                 <span
                   aria-hidden="true"
-                  className="ql-num text-lg sm:text-[20px] font-semibold leading-none text-[var(--ql-text-primary)]"
+                  className="ql-num text-[17px] sm:text-[19px] font-semibold leading-none text-[var(--ql-text-primary)]"
                 >
                   {priceParts.integer}
                   <span className="text-[0.76em] font-medium text-[var(--ql-text-secondary)]">
@@ -221,12 +308,12 @@ export const QuickCafeteriaKeypad: React.FC = () => {
                 </span>
 
                 {isOut ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--ql-tone-terracotta)] shrink-0">
+                  <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[var(--ql-tone-terracotta)] shrink-0">
                     <Ban className="w-3 h-3" />
                     Agotado
                   </span>
                 ) : isLow ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--ql-tone-amber)] ql-num shrink-0">
+                  <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-[var(--ql-tone-amber)] ql-num shrink-0">
                     <AlertTriangle className="w-3 h-3" />
                     {stockInfo.availableUnits}
                   </span>

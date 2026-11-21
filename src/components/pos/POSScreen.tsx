@@ -119,7 +119,7 @@ export const POSScreen: React.FC = () => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 14, scale: 0.96 }}
             transition={QL_SPRING_SNAPPY}
-            className="lg:hidden fixed bottom-[calc(var(--ql-mobile-nav-h)+var(--ql-mobile-dock-gap)+var(--ql-safe-bottom)+10px)] md:bottom-5 left-3.5 right-3.5 z-[45] flex justify-center pointer-events-none"
+            className="will-change-transform lg:hidden fixed bottom-[calc(var(--ql-mobile-nav-h)+var(--ql-mobile-dock-gap)+var(--ql-safe-bottom)+10px)] md:bottom-5 left-3.5 right-3.5 z-[45] flex justify-center pointer-events-none"
           >
             <motion.button
               key={`checkout-pulse-${pulseTick}`}
@@ -129,7 +129,7 @@ export const POSScreen: React.FC = () => {
               whileTap={{ scale: 0.975 }}
               transition={QL_SPRING_SNAPPY}
               onClick={() => setIsMobileCartOpen(true)}
-              className="pointer-events-auto w-full max-w-md h-[52px] px-4 sm:px-5 rounded-full flex items-center justify-between gap-3 bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-lg)] cursor-pointer select-none ql-focus-ring"
+              className="will-change-transform pointer-events-auto w-full max-w-md h-[52px] px-4 sm:px-5 rounded-full flex items-center justify-between gap-3 bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-lg)] cursor-pointer select-none ql-focus-ring"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold ql-num shrink-0 bg-[var(--ql-accent-text)]/15 text-[var(--ql-accent-text)]">
@@ -170,7 +170,7 @@ export const POSScreen: React.FC = () => {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={QL_SPRING_SNAPPY}
-              className="w-full max-w-lg rounded-t-3xl p-5 sm:p-6 pb-safe max-h-[88vh] flex flex-col border-t border-x border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)]"
+              className="will-change-transform w-full max-w-lg rounded-t-3xl p-5 sm:p-6 pb-safe max-h-[88vh] flex flex-col border-t border-x border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="w-10 h-1 rounded-full bg-[var(--ql-text-muted)]/30 mx-auto mb-3" />

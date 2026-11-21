@@ -48,9 +48,55 @@ export function generateUUID(): string {
 // ============================================================================
 
 // 1. RAW MATERIALS
-// Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available, category, is_sellable, is_quick_access, price, quick_color
+// Esquema: name, unit, current_stock, min_stock_alert, cost_per_unit, is_available, category, is_sellable, is_quick_access, price, quick_color (+ opcional image_url)
 const VALID_QUICK_COLORS = ['default', 'sage', 'slate', 'terracotta', 'amber', 'mauve'];
 const HEX_COLOR_REGEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const PRODUCT_IMAGES_CACHE_KEY = 'el_chiringuito_product_images_v1';
+
+function normalizeProductImageKey(name?: string): string {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function loadCachedProductImages(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(PRODUCT_IMAGES_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveCachedProductImage(id: string | undefined, name: string | undefined, imageUrl?: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const cache = loadCachedProductImages();
+    const cleanUrl = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+    const nameKey = normalizeProductImageKey(name);
+    if (cleanUrl) {
+      if (id) cache[`id:${id}`] = cleanUrl;
+      if (nameKey) cache[`name:${nameKey}`] = cleanUrl;
+    } else {
+      if (id) delete cache[`id:${id}`];
+      if (nameKey) delete cache[`name:${nameKey}`];
+    }
+    window.localStorage.setItem(PRODUCT_IMAGES_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+function resolveCachedProductImage(id?: string, name?: string): string | undefined {
+  const cache = loadCachedProductImages();
+  if (id && cache[`id:${id}`]) return cache[`id:${id}`];
+  const nameKey = normalizeProductImageKey(name);
+  if (nameKey && cache[`name:${nameKey}`]) return cache[`name:${nameKey}`];
+  return undefined;
+}
 
 export function sanitizeQuickColor(raw?: any): string {
   if (!raw || typeof raw !== 'string') return 'default';
@@ -85,6 +131,8 @@ export function toRawMaterialSnake(item: Record<string, any>) {
       : null;
   const priceVal = parsedPrice;
   const quickColorVal = sanitizeQuickColor(item.quick_color ?? item.quickColor);
+  const rawImage = item.image_url !== undefined ? item.image_url : item.imageUrl;
+  const imageUrlVal = typeof rawImage === 'string' && rawImage.trim() ? rawImage.trim() : null;
 
   const payload: Record<string, any> = {
     name: item.name,
@@ -99,6 +147,10 @@ export function toRawMaterialSnake(item: Record<string, any>) {
     price: priceVal,
     quick_color: quickColorVal,
   };
+
+  if (rawImage !== undefined) {
+    payload.image_url = imageUrlVal;
+  }
 
   const validId = cleanUUID(item.id);
   if (validId) {
@@ -133,8 +185,15 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
       ? Number(row.price)
       : undefined;
 
+  const idStr = String(row.id);
+  const remoteImage =
+    typeof (row.image_url ?? row.imageUrl) === 'string' && String(row.image_url ?? row.imageUrl).trim()
+      ? String(row.image_url ?? row.imageUrl).trim()
+      : undefined;
+  const imageUrl = remoteImage ?? resolveCachedProductImage(idStr, row.name);
+
   return {
-    id: String(row.id),
+    id: idStr,
     name: row.name,
     unit: row.unit,
     currentStock,
@@ -149,6 +208,8 @@ export function fromRawMaterialSnake(row: Record<string, any>) {
     price: parsedRowPrice,
     quickColor,
     quick_color: quickColor,
+    imageUrl,
+    image_url: imageUrl,
     // Compatibilidad bidireccional
     current_stock: currentStock,
     min_stock: minStock,
@@ -533,9 +594,21 @@ export async function insertRawMaterial(material: Record<string, any> | Record<s
 
     let { data, error } = await runQuery(payload);
 
-    // Fallback seguro si la columna quick_color aún no existe en el esquema remoto
-    if (error && error.message && error.message.includes('quick_color')) {
-      const fallbackPayload = payload.map(({ quick_color: _qc, ...rest }) => rest);
+    // Fallback seguro si quick_color o image_url aún no existen en el esquema remoto
+    if (
+      error &&
+      error.message &&
+      (error.message.includes('quick_color') ||
+        error.message.includes('image_url') ||
+        error.message.includes('schema cache'))
+    ) {
+      const stripQuick = error.message.includes('quick_color');
+      const fallbackPayload = payload.map((row) => {
+        const copy = { ...row };
+        delete copy.image_url;
+        if (stripQuick) delete copy.quick_color;
+        return copy;
+      });
       const retry = await runQuery(fallbackPayload);
       data = retry.data;
       error = retry.error;
@@ -545,7 +618,30 @@ export async function insertRawMaterial(material: Record<string, any> | Record<s
       console.warn('[Supabase] insertRawMaterial warning:', error.message);
       throw error;
     }
-    return (data || []).map(fromRawMaterialSnake);
+
+    const mapped = (data || []).map((row: Record<string, any>, idx: number) => {
+      const source = items[idx] || items[0] || {};
+      const explicitImage =
+        source.imageUrl !== undefined
+          ? source.imageUrl
+          : source.image_url !== undefined
+          ? source.image_url
+          : undefined;
+      if (explicitImage !== undefined) {
+        saveCachedProductImage(String(row.id), row.name || source.name, explicitImage || '');
+      }
+      const hydrated = fromRawMaterialSnake(row);
+      if (explicitImage !== undefined) {
+        const cleanExplicit =
+          typeof explicitImage === 'string' && explicitImage.trim()
+            ? explicitImage.trim()
+            : undefined;
+        return { ...hydrated, imageUrl: cleanExplicit, image_url: cleanExplicit };
+      }
+      return hydrated;
+    });
+
+    return mapped;
   } catch (err: any) {
     console.warn('[Supabase] insertRawMaterial catch:', err);
     throw err;

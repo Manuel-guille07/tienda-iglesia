@@ -5,16 +5,19 @@ import { useTheme } from '../../context/ThemeContext';
 import { Boxes, Plus, Coffee, Edit, Trash2, CheckCircle, EyeOff, Zap, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
-import { AddRawMaterialModal } from './AddRawMaterialModal';
+import { AddRawMaterialModal, isSuperAdminRole } from './AddRawMaterialModal';
 import { RecipeEditorModal } from './RecipeEditorModal';
 import { Product, RawMaterial } from '../../types';
-import { parseMoneyInput } from '../../utils/finance';
+import { formatCurrency, parseMoneyInput } from '../../utils/finance';
+import { useAuthStore } from '../../store/useAuthStore';
 import toast from 'react-hot-toast';
 
 export const InventoryScreen: React.FC = () => {
   const { t } = useLanguage();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { currentUser } = useAuthStore();
+  const isSuperAdmin = isSuperAdminRole(currentUser?.role);
 
   const {
     rawMaterials,
@@ -225,11 +228,23 @@ export const InventoryScreen: React.FC = () => {
                 >
                   <div>
                     <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-sm leading-snug truncate">{m.name}</h3>
-                        <span className={`text-[10px] font-semibold uppercase tracking-wider block mt-0.5 ${secondaryText}`}>
-                          {getCategoryLabel(m.category)}
-                        </span>
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        {(m.imageUrl || m.image_url) && (
+                          <div className="w-10 h-10 rounded-xl border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)] flex items-center justify-center shrink-0 overflow-hidden p-1">
+                            <img
+                              src={m.imageUrl || m.image_url}
+                              alt=""
+                              loading="lazy"
+                              className="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(20,18,16,0.18)]"
+                            />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-sm leading-snug truncate">{m.name}</h3>
+                          <span className={`text-[10px] font-semibold uppercase tracking-wider block mt-0.5 ${secondaryText}`}>
+                            {getCategoryLabel(m.category)}
+                          </span>
+                        </div>
                       </div>
 
                       {m.isOutOfStock ? (
@@ -258,13 +273,13 @@ export const InventoryScreen: React.FC = () => {
 
                       {isSellable && typeof m.price === 'number' && (
                         <span
-                          className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-xl ${
+                          className={`text-sm font-bold ql-num px-2.5 py-1 rounded-xl ${
                             isDark
                               ? 'bg-[#2A2420] text-[#F4F0EA]'
                               : 'bg-[#E2DDD5] text-[#141210]'
                           }`}
                         >
-                          {m.price.toFixed(2)} €
+                          {formatCurrency(m.price)}
                         </span>
                       )}
                     </div>
@@ -282,6 +297,11 @@ export const InventoryScreen: React.FC = () => {
                       {m.isQuickAccess && (
                         <span className={`border px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold ${darkStoneTag}`}>
                           <Zap className="w-3 h-3" /> Botonera
+                        </span>
+                      )}
+                      {isSuperAdmin && isSellable && !(m.imageUrl || m.image_url) && (
+                        <span className="border border-[var(--ql-hairline)] bg-[var(--ql-tone-amber-soft)] text-[var(--ql-tone-amber)] px-2 py-0.5 rounded-lg font-semibold">
+                          Sin foto 3D
                         </span>
                       )}
                     </div>

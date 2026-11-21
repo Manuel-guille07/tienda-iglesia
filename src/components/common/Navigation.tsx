@@ -170,7 +170,7 @@ export const Navigation: React.FC = () => {
                     layoutId="ql-mobile-dock-pill"
                     transition={QL_SPRING_SNAPPY}
                     aria-hidden="true"
-                    className="absolute inset-0.5 rounded-[19px] bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
+                    className="will-change-transform absolute inset-0.5 rounded-[19px] bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
                   />
                 )}
                 <Icon

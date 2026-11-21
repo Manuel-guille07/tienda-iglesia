@@ -111,6 +111,7 @@ export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts:
       : (existing?.isQuickAccess !== undefined ? existing.isQuickAccess : false);
 
     const quickColor = mat.quickColor || mat.quick_color || existing?.quickColor || existing?.quick_color || 'default';
+    const imageUrl = mat.imageUrl || mat.image_url || existing?.imageUrl || existing?.image_url || undefined;
 
     return {
       id: mat.id,
@@ -124,6 +125,8 @@ export function buildDynamicProducts(rawMaterials: RawMaterial[], savedProducts:
       color: existing?.color || colors[idx % colors.length],
       quickColor,
       quick_color: quickColor,
+      imageUrl,
+      image_url: imageUrl,
       badge: mat.isOutOfStock || mat.currentStock <= 0 ? 'Agotado' : (mat.currentStock <= mat.minStock ? 'Bajo' : undefined),
       recipe: existing?.recipe || [
         { rawMaterialId: mat.id, quantity: 1 },
@@ -230,6 +233,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
             : undefined,
         quickColor: item.quickColor ?? item.quick_color ?? 'default',
         quick_color: item.quick_color ?? item.quickColor ?? 'default',
+        imageUrl: item.imageUrl ?? item.image_url ?? undefined,
+        image_url: item.image_url ?? item.imageUrl ?? undefined,
       }));
 
       const products = buildDynamicProducts(rawMaterials, get().products);
@@ -266,6 +271,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
             : undefined,
         quickColor: item.quickColor ?? item.quick_color ?? 'default',
         quick_color: item.quick_color ?? item.quickColor ?? 'default',
+        imageUrl: item.imageUrl ?? item.image_url ?? undefined,
+        image_url: item.image_url ?? item.imageUrl ?? undefined,
       }));
 
       const products = buildDynamicProducts(rawMaterials, get().products);

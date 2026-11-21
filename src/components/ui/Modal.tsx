@@ -64,7 +64,7 @@ export const Modal: React.FC<ModalProps> = ({
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={QL_SPRING_SNAPPY}
             className={cn(
-              'w-full rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[92vh] border border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)] transition-colors',
+              'will-change-transform w-full rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[92vh] border border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)] transition-colors',
               maxWidths[maxWidth]
             )}
             onClick={(e) => e.stopPropagation()}

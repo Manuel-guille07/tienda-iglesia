@@ -96,7 +96,7 @@ export const AppLayout: React.FC = () => {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={QL_SPRING_SNAPPY}
-            className="fixed bottom-0 left-0 right-0 z-[61] max-w-lg mx-auto rounded-t-3xl pb-safe p-5 sm:p-6 space-y-4 border-t border-x border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)]"
+            className="will-change-transform fixed bottom-0 left-0 right-0 z-[61] max-w-lg mx-auto rounded-t-3xl pb-safe p-5 sm:p-6 space-y-4 border-t border-x border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Indicador superior de arrastre */}
