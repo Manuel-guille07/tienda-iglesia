@@ -8,6 +8,7 @@ html[data-theme="light"] {
   --ql-bg-elevated: #F2EFE9;
   --ql-bg-muted: #E6E1D8;
   --ql-bg-glass: rgba(250, 248, 245, 0.84);
+  --ql-bg-dock: rgba(250, 248, 245, 0.78);
 
   /* Bordes sólidos (compatibilidad) y Hairlines semitransparentes 2026 */
   --ql-border: #E2DDD5;
@@ -15,6 +16,7 @@ html[data-theme="light"] {
   --ql-hairline: rgba(20, 18, 16, 0.085);
   --ql-hairline-strong: rgba(20, 18, 16, 0.16);
   --ql-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --ql-dock-specular: inset 0 1px 0 rgba(255, 255, 255, 0.88);
 
   /* Tipografía */
   --ql-text-primary: #141210;
@@ -48,9 +50,13 @@ html[data-theme="light"] {
   --ql-shadow-lg:
     0 2px 6px rgba(20, 18, 16, 0.06),
     0 18px 42px -14px rgba(20, 18, 16, 0.14);
+  --ql-shadow-dock:
+    0 2px 8px rgba(20, 18, 16, 0.07),
+    0 16px 36px -12px rgba(20, 18, 16, 0.18);
 
-  /* Métricas de layout móvil / PWA (preparadas para barra inferior fija iOS) */
-  --ql-mobile-nav-h: 68px;
+  /* Métricas de layout móvil / PWA (Floating Glass Dock) */
+  --ql-mobile-nav-h: 62px;
+  --ql-mobile-dock-gap: 10px;
   --ql-safe-bottom: env(safe-area-inset-bottom, 0px);
   --ql-safe-top: env(safe-area-inset-top, 0px);
 
@@ -64,6 +70,7 @@ html[data-theme="dark"] {
   --ql-bg-elevated: #211D1A;
   --ql-bg-muted: #2A2420;
   --ql-bg-glass: rgba(23, 20, 18, 0.84);
+  --ql-bg-dock: rgba(26, 22, 20, 0.78);
 
   /* Bordes sólidos y Hairlines semitransparentes */
   --ql-border: #2A2420;
@@ -71,6 +78,7 @@ html[data-theme="dark"] {
   --ql-hairline: rgba(244, 240, 234, 0.085);
   --ql-hairline-strong: rgba(244, 240, 234, 0.16);
   --ql-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --ql-dock-specular: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 
   /* Tipografía */
   --ql-text-primary: #F4F0EA;
@@ -104,6 +112,9 @@ html[data-theme="dark"] {
   --ql-shadow-lg:
     0 4px 10px rgba(0, 0, 0, 0.4),
     0 22px 48px -12px rgba(0, 0, 0, 0.72);
+  --ql-shadow-dock:
+    0 4px 12px rgba(0, 0, 0, 0.45),
+    0 20px 44px -10px rgba(0, 0, 0, 0.78);
 
   color-scheme: dark;
 }
@@ -155,6 +166,14 @@ html[data-theme="dark"] {
   border-color: var(--ql-hairline);
 }
 
+.ql-dock-glass {
+  background-color: var(--ql-bg-dock);
+  backdrop-filter: saturate(165%) blur(24px);
+  -webkit-backdrop-filter: saturate(165%) blur(24px);
+  border: 1px solid var(--ql-hairline-strong);
+  box-shadow: var(--ql-dock-specular), var(--ql-shadow-dock);
+}
+
 .ql-text-primary {
   color: var(--ql-text-primary);
 }
@@ -204,7 +223,7 @@ html[data-theme="dark"] {
 }
 
 .pb-mobile-nav {
-  padding-bottom: calc(var(--ql-mobile-nav-h) + var(--ql-safe-bottom) + 1rem);
+  padding-bottom: calc(var(--ql-mobile-nav-h) + var(--ql-mobile-dock-gap) + var(--ql-safe-bottom) + 1.5rem);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -218,24 +237,72 @@ html[data-theme="dark"] {
   }
 }
 
+/* ============================================================================
+ * Impresión / Exportación PDF A4 aislada (cero fixed/sticky/backdrop-blur)
+ * ============================================================================ */
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
 @media print {
-  body * {
-    visibility: hidden;
+  html,
+  body {
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #141210 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  #elarx-printable-sheet,
-  #elarx-printable-sheet * {
-    visibility: visible;
+
+  /* Oculta por completo #root, modales fixed, headers sticky y toasts */
+  body > *:not(#elarx-print-root) {
+    display: none !important;
   }
-  #elarx-printable-sheet {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    max-height: none !important;
+
+  #elarx-print-root {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 186mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #141210 !important;
     overflow: visible !important;
     box-shadow: none !important;
     border: none !important;
-    background: #ffffff !important;
-    color: #0f172a !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  #elarx-print-root table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #elarx-print-root thead {
+    display: table-header-group !important;
+  }
+
+  #elarx-print-root tfoot {
+    display: table-footer-group !important;
+  }
+
+  #elarx-print-root tr,
+  #elarx-print-root .ql-print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  #elarx-print-root .ql-print-keep-with-next {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
   }
 }

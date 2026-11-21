@@ -1,14 +1,14 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Sale, ShiftClose, SoldItemSummary, VoidAuditRecord } from '../../types';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { useTheme } from '../../context/ThemeContext';
 import {
   calculateShiftTabBreakdown,
   TabPaymentExport,
   useCloseoutStore,
 } from '../../store/useCloseoutStore';
-import { fromCents, toCents } from '../../utils/finance';
+import { formatCurrency, formatInteger, fromCents, toCents } from '../../utils/finance';
 import {
   Printer,
   Download,
@@ -300,14 +300,309 @@ export function exportSalesHistoryToCSV(
   downloadAccountingCSV(filename, rows);
 }
 
+interface PrintableDocumentProps {
+  report: PrintableReportData;
+  generatedAtLabel: string;
+  soldItemsSummary: SoldItemSummary[];
+  totalCash: number;
+  totalCard: number;
+  totalFiados: number;
+  totalDonativos: number;
+  totalCafes: number;
+  totalRestoCafeteria: number;
+  totalTabPayments: number;
+}
+
+/**
+ * Plantilla A4 pura sin position:fixed, sticky, backdrop-blur ni overflow-hidden.
+ * Se reutiliza en la vista previa del modal y en el portal aislado #elarx-print-root.
+ */
+const PrintableReportDocument: React.FC<PrintableDocumentProps> = ({
+  report,
+  generatedAtLabel,
+  soldItemsSummary,
+  totalCash,
+  totalCard,
+  totalFiados,
+  totalDonativos,
+  totalCafes,
+  totalRestoCafeteria,
+  totalTabPayments,
+}) => {
+  const totalSoldUnits = soldItemsSummary.reduce((acc, it) => acc + it.quantity, 0);
+
+  return (
+    <div className="bg-white text-[#141210] space-y-4">
+      {/* Encabezado limpio A4 */}
+      <div className="ql-print-avoid-break flex flex-col sm:flex-row print:flex-row sm:items-start print:items-start justify-between gap-3 pb-3.5 border-b-2 border-[#141210]">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-[#141210] leading-none">
+              El Chiringuito
+            </h1>
+            <span className="text-[10px] font-semibold text-[#3D352F] uppercase tracking-wider px-2 py-0.5 rounded bg-[#EFECE6] border border-[#E2DDD5]">
+              Reporte Oficial
+            </span>
+          </div>
+          <div className="text-[11px] text-[#3D352F] flex flex-wrap items-center gap-x-4 gap-y-0.5 ql-num pt-1">
+            <span>
+              <strong className="text-[#141210]">Fecha:</strong> {generatedAtLabel}
+            </span>
+            <span>
+              <strong className="text-[#141210]">Cajero:</strong> {report.generatedBy} ({report.generatedRole})
+            </span>
+            <span>
+              <strong className="text-[#141210]">Periodo:</strong> {report.periodLabel}
+            </span>
+          </div>
+        </div>
+        <div className="text-left sm:text-right print:text-right shrink-0">
+          <h2 className="text-sm font-bold text-[#141210]">{report.title}</h2>
+          <p className="text-[11px] text-[#574F47]">{report.subtitle}</p>
+        </div>
+      </div>
+
+      {/* Totales Financieros Principales */}
+      <div className="ql-print-avoid-break border border-[#E2DDD5] rounded-xl p-3.5 bg-[#FAF8F5]">
+        <h3 className="ql-print-keep-with-next text-[11px] font-bold uppercase tracking-wider text-[#141210] mb-2.5">
+          Resumen Contable y Totales Financieros
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 print:grid-cols-4 gap-2.5">
+          <div className="border border-[#E2DDD5] rounded-lg p-2.5 bg-white">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#574F47] block">
+              Total Efectivo
+            </span>
+            <strong className="text-base font-bold text-[#141210] ql-num mt-0.5 block">
+              {formatCurrency(totalCash)}
+            </strong>
+          </div>
+
+          <div className="border border-[#E2DDD5] rounded-lg p-2.5 bg-white">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#574F47] block">
+              Total Datáfono
+            </span>
+            <strong className="text-base font-bold text-[#141210] ql-num mt-0.5 block">
+              {formatCurrency(totalCard)}
+            </strong>
+          </div>
+
+          <div className="border border-[#E2DDD5] rounded-lg p-2.5 bg-white">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#574F47] block">
+              Total Fiados
+            </span>
+            <strong className="text-base font-bold text-[#141210] ql-num mt-0.5 block">
+              {formatCurrency(totalFiados)}
+            </strong>
+          </div>
+
+          <div className="border border-[#E2DDD5] rounded-lg p-2.5 bg-white">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#574F47] block">
+              Total Donativos
+            </span>
+            <strong className="text-base font-bold text-[#141210] ql-num mt-0.5 block">
+              {formatCurrency(totalDonativos)}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Separación Contable por Categoría */}
+      <div className="ql-print-avoid-break border border-[#E2DDD5] rounded-xl p-3.5 bg-[#FAF8F5]">
+        <h3 className="ql-print-keep-with-next text-[11px] font-bold uppercase tracking-wider text-[#141210] mb-2.5">
+          Separación Contable por Categoría
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 print:grid-cols-3 gap-2.5">
+          <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#E2DDD5] bg-white">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#141210]">
+              <Coffee className="w-3.5 h-3.5 text-[#574F47] shrink-0" />
+              Total Cafés
+            </span>
+            <strong className="text-sm font-bold ql-num text-[#141210]">
+              {formatCurrency(totalCafes)}
+            </strong>
+          </div>
+          <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#E2DDD5] bg-white">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#141210]">
+              <ShoppingBag className="w-3.5 h-3.5 text-[#574F47] shrink-0" />
+              Resto Cafetería
+            </span>
+            <strong className="text-sm font-bold ql-num text-[#141210]">
+              {formatCurrency(totalRestoCafeteria)}
+            </strong>
+          </div>
+          <div className="flex items-center justify-between p-2.5 rounded-lg border border-[#E2DDD5] bg-white">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#141210]">
+              <Banknote className="w-3.5 h-3.5 text-[#574F47] shrink-0" />
+              Abonos Recibidos
+            </span>
+            <strong className="text-sm font-bold ql-num text-[#141210]">
+              {formatCurrency(totalTabPayments)}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Arqueo de Caja del Turno */}
+      {report.shiftClose && (
+        <div className="ql-print-avoid-break border border-[#E2DDD5] rounded-xl p-3.5 bg-[#FAF8F5]">
+          <h3 className="ql-print-keep-with-next text-[11px] font-bold uppercase tracking-wider text-[#141210] mb-2.5">
+            Arqueo de Caja del Turno
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 print:grid-cols-4 gap-3 text-xs ql-num">
+            <div>
+              <span className="text-[#574F47] block">Efectivo Esperado</span>
+              <strong className="text-sm font-bold text-[#141210]">
+                {formatCurrency(report.shiftClose.expectedCash ?? 0)}
+              </strong>
+            </div>
+            <div>
+              <span className="text-[#574F47] block">Efectivo Contado</span>
+              <strong className="text-sm font-bold text-[#141210]">
+                {formatCurrency(report.shiftClose.actualCash ?? 0)}
+              </strong>
+            </div>
+            <div>
+              <span className="text-[#574F47] block">Descuadre</span>
+              <strong
+                className={`text-sm font-bold ${
+                  (report.shiftClose.difference ?? 0) < 0
+                    ? 'text-[#A63A3A]'
+                    : 'text-[#2D6A4F]'
+                }`}
+              >
+                {formatCurrency(report.shiftClose.difference ?? 0, {
+                  showSign: (report.shiftClose.difference ?? 0) > 0,
+                })}
+              </strong>
+            </div>
+            <div>
+              <span className="text-[#574F47] block">Total Datáfono</span>
+              <strong className="text-sm font-bold text-[#141210]">
+                {formatCurrency(report.shiftClose.totalCard ?? 0)}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lista de Productos Consumidos (con salto limpio por fila) */}
+      <div className="border border-[#E2DDD5] rounded-xl p-3.5 bg-[#FAF8F5]">
+        <div className="ql-print-keep-with-next flex items-center justify-between pb-2 mb-1.5 border-b border-[#141210]/15">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#141210] flex items-center gap-1.5">
+            <PackageCheck className="w-3.5 h-3.5" />
+            Lista de Productos Consumidos
+          </h3>
+          <span className="text-xs font-semibold ql-num text-[#3D352F]">
+            {formatInteger(totalSoldUnits)} uds. totales
+          </span>
+        </div>
+
+        {soldItemsSummary.length === 0 ? (
+          <p className="text-xs text-[#574F47] italic py-2">
+            Sin desglose de artículos individuales disponible en este ticket o periodo.
+          </p>
+        ) : (
+          <div className="divide-y divide-[#E2DDD5]">
+            {soldItemsSummary.map((item) => (
+              <div
+                key={`${item.name}-${item.category || ''}`}
+                className="ql-print-avoid-break flex items-center justify-between py-2 px-1 text-xs"
+              >
+                <span className="font-medium text-[#141210] pr-3">
+                  <strong className="ql-num">{formatInteger(item.quantity)} ×</strong> {item.name}
+                </span>
+                <span className="font-semibold ql-num text-[#141210] shrink-0">
+                  {formatCurrency(item.revenue)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Tabla de Desglose de Operaciones (con thead repetible en cada página A4) */}
+      <div>
+        <h3 className="ql-print-keep-with-next text-[11px] font-bold uppercase tracking-wider text-[#141210] mb-2">
+          Desglose de Operaciones ({formatInteger(report.sales.length)})
+        </h3>
+        {report.sales.length === 0 ? (
+          <p className="text-xs text-[#574F47] italic py-4 text-center border border-dashed border-[#E2DDD5] rounded-lg">
+            Sin transacciones registradas en este periodo.
+          </p>
+        ) : (
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr className="border-b border-[#141210]/25 text-[#141210] bg-[#EFECE6]">
+                  <th className="py-1.5 px-2 font-semibold">Ticket</th>
+                  <th className="py-1.5 px-2 font-semibold">Fecha/Hora</th>
+                  <th className="py-1.5 px-2 font-semibold">Productos</th>
+                  <th className="py-1.5 px-2 font-semibold">Método</th>
+                  <th className="py-1.5 px-2 font-semibold">Cajero</th>
+                  <th className="py-1.5 px-2 font-semibold text-right">Importe</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E2DDD5] ql-num">
+                {report.sales.map((s) => {
+                  const itemsDetail =
+                    s.items && s.items.length > 0
+                      ? s.items
+                          .map((it) => {
+                            const name = it.name || it.product?.name || 'Producto';
+                            const unitPrice = Number(
+                              it.price ?? it.customPrice ?? it.product?.price ?? 0
+                            );
+                            const sub = Number(it.subtotal ?? unitPrice * it.quantity);
+                            return `${it.quantity} × ${name} (${formatCurrency(sub)})`;
+                          })
+                          .join(', ')
+                      : 'Consumo directo';
+                  return (
+                    <tr key={s.id} className="ql-print-avoid-break">
+                      <td className="py-1.5 px-2 text-[#141210] whitespace-nowrap">
+                        #{s.id.slice(0, 8)}
+                      </td>
+                      <td className="py-1.5 px-2 text-[#574F47] whitespace-nowrap">
+                        {new Date(s.timestamp).toLocaleString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="py-1.5 px-2 text-[#141210]">{itemsDetail}</td>
+                      <td className="py-1.5 px-2 uppercase text-[#141210] whitespace-nowrap">
+                        {s.paymentMethod}
+                      </td>
+                      <td className="py-1.5 px-2 text-[#141210] whitespace-nowrap">
+                        {s.sellerName}
+                      </td>
+                      <td className="py-1.5 px-2 text-right font-semibold text-[#141210] whitespace-nowrap">
+                        {formatCurrency(s.total)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Pie de firmas */}
+      <div className="ql-print-avoid-break mt-6 pt-3.5 border-t border-[#E2DDD5] flex flex-col sm:flex-row print:flex-row items-start sm:items-center print:items-center justify-between gap-2 text-[11px] text-[#574F47]">
+        <span>Generado por El Chiringuito POS</span>
+        <span>Firma Tesorería / Supervisión: ______________________</span>
+      </div>
+    </div>
+  );
+};
+
 export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
   isOpen,
   onClose,
   report,
 }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
   if (!isOpen || !report) return null;
 
   const computed = calculateSalesAccountingBreakdown(report.sales);
@@ -387,335 +682,85 @@ export const PrintableReportModal: React.FC<PrintableReportModalProps> = ({
             .reduce((acc, s) => acc + toCents(s.total || 0), 0)
         );
 
+  const generatedAtLabel = new Date().toLocaleString('es-ES');
+
+  const docProps: PrintableDocumentProps = {
+    report,
+    generatedAtLabel,
+    soldItemsSummary,
+    totalCash,
+    totalCard,
+    totalFiados,
+    totalDonativos,
+    totalCafes,
+    totalRestoCafeteria,
+    totalTabPayments,
+  };
+
   const handlePrint = () => {
-    toast.success('Abriendo diálogo de impresión / Guardar como PDF');
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    window.print();
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Vista Imprimible Contable (PDF) - El Chiringuito">
-      <div className="space-y-4">
-        {/* Action Toolbar */}
-        <div
-          className={`flex flex-wrap items-center justify-between gap-2 border p-3 rounded-2xl print:hidden ${
-            isDark
-              ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
-              : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
-          }`}
-        >
-          <div className={`flex items-center gap-2 text-xs font-medium ${isDark ? 'text-[#C2B8AD]' : 'text-[#141210]'}`}>
-            <FileText className="w-4 h-4 shrink-0" />
-            <span>Documento formateado para guardar como PDF o imprimir en A4.</span>
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        maxWidth="2xl"
+        title="Vista Imprimible Contable (PDF)"
+        description="El Chiringuito · Documento A4 listo para imprimir o guardar como PDF"
+      >
+        <div className="space-y-4">
+          {/* Action Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)] p-3 rounded-2xl print:hidden">
+            <div className="flex items-center gap-2 text-xs font-medium text-[var(--ql-text-secondary)]">
+              <FileText className="w-4 h-4 shrink-0 text-[var(--ql-text-primary)]" />
+              <span>Formato A4 limpio con paginación automática.</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="subtle"
+                size="xs"
+                icon={<Download className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  exportSalesHistoryToCSV(
+                    report.sales,
+                    report.voidAudits || [],
+                    report.periodLabel,
+                    report.tabPayments || []
+                  );
+                  toast.success('Reporte descargado en formato CSV / Excel');
+                }}
+              >
+                CSV / Excel
+              </Button>
+              <Button
+                variant="primary"
+                size="xs"
+                icon={<Printer className="w-3.5 h-3.5" />}
+                onClick={handlePrint}
+              >
+                Imprimir / Guardar PDF
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Download className="w-3.5 h-3.5" />}
-              onClick={() => {
-                exportSalesHistoryToCSV(
-                  report.sales,
-                  report.voidAudits || [],
-                  report.periodLabel,
-                  report.tabPayments || []
-                );
-                toast.success('Reporte descargado en formato CSV / Excel');
-              }}
-            >
-              CSV / Excel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Printer className="w-3.5 h-3.5" />}
-              onClick={handlePrint}
-            >
-              Imprimir / Guardar PDF
-            </Button>
+
+          {/* Vista previa en pantalla */}
+          <div className="bg-white text-[#141210] rounded-2xl p-4 sm:p-6 border border-[var(--ql-hairline)] shadow-inner max-h-[64vh] overflow-y-auto">
+            <PrintableReportDocument {...docProps} />
           </div>
         </div>
+      </Modal>
 
-        {/* Printable Document Sheet */}
-        <div
-          id="elarx-printable-sheet"
-          className="bg-white text-[#141210] rounded-2xl p-5 sm:p-6 border border-[#E2DDD5] shadow-inner max-h-[68vh] overflow-y-auto print:max-h-none print:overflow-visible print:shadow-none print:border-0"
-        >
-          {/* Encabezado: Título "El Chiringuito" (elegante/bold), seguido de fecha y cajero */}
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b-2 border-[#141210]">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-2xl font-bold tracking-tight text-[#141210]">
-                  El Chiringuito
-                </h1>
-                <span className="text-[11px] font-semibold text-[#3D352F] uppercase tracking-wider px-2 py-0.5 rounded bg-[#EFECE6] border border-[#E2DDD5]">
-                  Ticket / Reporte Oficial
-                </span>
-              </div>
-              <div className="text-xs text-[#141210] flex flex-wrap items-center gap-x-4 gap-y-1 font-mono tabular-nums pt-0.5">
-                <span>
-                  <strong>Fecha:</strong> {new Date().toLocaleString('es-ES')}
-                </span>
-                <span>
-                  <strong>Cajero:</strong> {report.generatedBy} ({report.generatedRole})
-                </span>
-                <span>
-                  <strong>Periodo:</strong> {report.periodLabel}
-                </span>
-              </div>
-            </div>
-            <div className="text-left sm:text-right">
-              <h2 className="text-base font-bold text-[#141210]">{report.title}</h2>
-              <p className="text-xs text-[#3D352F]">{report.subtitle}</p>
-            </div>
-          </div>
-
-          {/* Lista de Productos Consumidos (con border-b border-surface-200 en cada fila) */}
-          <div className="my-4 border border-[#E2DDD5] rounded-xl p-4 bg-[#FAF8F5]">
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#141210]/15">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#141210] flex items-center gap-1.5">
-                <PackageCheck className="w-3.5 h-3.5" />
-                Lista de Productos Consumidos
-              </h3>
-              <span className="text-xs font-semibold font-mono text-[#3D352F]">
-                {soldItemsSummary.reduce((acc, it) => acc + it.quantity, 0)} uds. totales
-              </span>
-            </div>
-
-            {soldItemsSummary.length === 0 ? (
-              <p className="text-xs text-[#3D352F] italic py-2">
-                Sin desglose de artículos individuales disponible en este ticket o periodo.
-              </p>
-            ) : (
-              <div className="divide-y divide-[#E2DDD5]">
-                {soldItemsSummary.map((item) => (
-                  <div
-                    key={`${item.name}-${item.category || ''}`}
-                    className="flex items-center justify-between py-2.5 px-2 border-b border-surface-200 border-[#E2DDD5] last:border-b-0 text-xs sm:text-sm"
-                  >
-                    <span className="font-semibold text-[#141210] pr-3">
-                      {item.quantity} x {item.name} - {item.revenue.toFixed(2)}€
-                    </span>
-                    <span className="font-mono font-bold tabular-nums text-[#141210] shrink-0">
-                      {item.revenue.toFixed(2)} €
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Resumen Contable y Totales Financieros (con espaciado my-4 y gap-4) */}
-          <div className="my-4 space-y-4">
-            {/* Totales Financieros Principales resaltados en negrita y tamaño mayor */}
-            <div className="border border-[#E2DDD5] rounded-xl p-4 bg-[#FAF8F5]">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#141210] mb-3">
-                Resumen Contable y Totales Financieros
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="border border-[#E2DDD5] rounded-xl p-3 bg-white">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#3D352F] block">
-                    Total Efectivo
-                  </span>
-                  <strong className="text-lg sm:text-xl font-bold text-[#141210] font-mono tabular-nums mt-1 block">
-                    {totalCash.toFixed(2)} €
-                  </strong>
-                </div>
-
-                <div className="border border-[#E2DDD5] rounded-xl p-3 bg-white">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#3D352F] block">
-                    Total Datáfono
-                  </span>
-                  <strong className="text-lg sm:text-xl font-bold text-[#141210] font-mono tabular-nums mt-1 block">
-                    {totalCard.toFixed(2)} €
-                  </strong>
-                </div>
-
-                <div className="border border-[#E2DDD5] rounded-xl p-3 bg-white">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#3D352F] block">
-                    Total Fiados
-                  </span>
-                  <strong className="text-lg sm:text-xl font-bold text-[#141210] font-mono tabular-nums mt-1 block">
-                    {totalFiados.toFixed(2)} €
-                  </strong>
-                </div>
-
-                <div className="border border-[#E2DDD5] rounded-xl p-3 bg-white">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#3D352F] block">
-                    Total Donativos
-                  </span>
-                  <strong className="text-lg sm:text-xl font-bold text-[#141210] font-mono tabular-nums mt-1 block">
-                    {totalDonativos.toFixed(2)} €
-                  </strong>
-                </div>
-              </div>
-
-              {/* KPIs adicionales del reporte */}
-              {report.kpis.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-3 border-t border-[#E2DDD5]">
-                  {report.kpis.map((kpi, idx) => (
-                    <div key={idx} className="px-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-[#3D352F] block">
-                        {kpi.label}
-                      </span>
-                      <strong className="text-base sm:text-lg font-bold text-[#141210] font-mono tabular-nums mt-0.5 block">
-                        {kpi.value}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Separación Contable: Total Cafés vs Total Resto de Cafetería vs Abonos Recibidos */}
-            <div className="border border-[#E2DDD5] rounded-xl p-4 bg-[#FAF8F5]">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#141210] mb-3">
-                Separación Contable por Categoría
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-[#E2DDD5] bg-white">
-                  <span className="flex items-center gap-2 text-xs font-semibold text-[#141210]">
-                    <Coffee className="w-3.5 h-3.5 text-[#3D352F]" />
-                    Total Cafés
-                  </span>
-                  <strong className="text-base sm:text-lg font-bold font-mono tabular-nums text-[#141210]">
-                    {totalCafes.toFixed(2)} €
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-[#E2DDD5] bg-white">
-                  <span className="flex items-center gap-2 text-xs font-semibold text-[#141210]">
-                    <ShoppingBag className="w-3.5 h-3.5 text-[#3D352F]" />
-                    Total Resto de Cafetería
-                  </span>
-                  <strong className="text-base sm:text-lg font-bold font-mono tabular-nums text-[#141210]">
-                    {totalRestoCafeteria.toFixed(2)} €
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded-lg border border-[#E2DDD5] bg-white">
-                  <span className="flex items-center gap-2 text-xs font-semibold text-[#141210]">
-                    <Banknote className="w-3.5 h-3.5 text-[#3D352F]" />
-                    Abonos Recibidos (Deudas previas)
-                  </span>
-                  <strong className="text-base sm:text-lg font-bold font-mono tabular-nums text-[#141210]">
-                    {totalTabPayments.toFixed(2)} €
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Optional Shift Arqueo Breakdown */}
-            {report.shiftClose && (
-              <div className="border border-[#E2DDD5] rounded-xl p-4 bg-[#FAF8F5]">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#141210] mb-3">
-                  Arqueo de Caja del Turno
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono tabular-nums">
-                  <div>
-                    <span className="text-[#3D352F] block">Efectivo Esperado:</span>
-                    <strong className="text-base font-bold text-[#141210]">
-                      {(report.shiftClose.expectedCash ?? 0).toFixed(2)}€
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-[#3D352F] block">Efectivo Contado:</span>
-                    <strong className="text-base font-bold text-[#141210]">
-                      {(report.shiftClose.actualCash ?? 0).toFixed(2)}€
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-[#3D352F] block">Descuadre:</span>
-                    <strong
-                      className={`text-base font-bold ${
-                        (report.shiftClose.difference ?? 0) < 0
-                          ? 'text-rose-700'
-                          : 'text-emerald-800'
-                      }`}
-                    >
-                      {(report.shiftClose.difference ?? 0).toFixed(2)}€
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="text-[#3D352F] block">Total Datáfono:</span>
-                    <strong className="text-base font-bold text-[#141210]">
-                      {(report.shiftClose.totalCard ?? 0).toFixed(2)}€
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Sales Table */}
-          <div className="my-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#141210] mb-2">
-              Desglose de Operaciones ({report.sales.length})
-            </h3>
-            {report.sales.length === 0 ? (
-              <p className="text-xs text-[#3D352F] italic py-4 text-center border border-dashed border-[#E2DDD5] rounded-lg">
-                Sin transacciones registradas en este periodo.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-[#141210]/20 text-[#141210] bg-[#EFECE6]">
-                      <th className="py-2 px-2 font-semibold">Ticket</th>
-                      <th className="py-2 px-2 font-semibold">Fecha/Hora</th>
-                      <th className="py-2 px-2 font-semibold">Productos</th>
-                      <th className="py-2 px-2 font-semibold">Método</th>
-                      <th className="py-2 px-2 font-semibold">Cajero</th>
-                      <th className="py-2 px-2 font-semibold text-right">Importe</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E2DDD5] font-mono tabular-nums">
-                    {report.sales.slice(0, 50).map((s) => {
-                      const itemsDetail =
-                        s.items && s.items.length > 0
-                          ? s.items
-                              .map((it) => {
-                                const name = it.name || it.product?.name || 'Producto';
-                                const unitPrice = Number(
-                                  it.price ?? it.customPrice ?? it.product?.price ?? 0
-                                );
-                                const sub = Number(it.subtotal ?? unitPrice * it.quantity);
-                                return `${it.quantity} x ${name} - ${sub.toFixed(2)}€`;
-                              })
-                              .join(', ')
-                          : 'Consumo directo';
-                      return (
-                        <tr key={s.id} className="border-b border-surface-200 border-[#E2DDD5]">
-                          <td className="py-2 px-2 text-[#141210]">#{s.id.slice(0, 8)}</td>
-                          <td className="py-2 px-2 text-[#3D352F]">
-                            {new Date(s.timestamp).toLocaleString('es-ES', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </td>
-                          <td className="py-2 px-2 font-sans text-[#141210]">{itemsDetail}</td>
-                          <td className="py-2 px-2 uppercase text-[#141210]">{s.paymentMethod}</td>
-                          <td className="py-2 px-2 font-sans text-[#141210]">{s.sellerName}</td>
-                          <td className="py-2 px-2 text-right font-bold text-[#141210]">
-                            {s.total.toFixed(2)}€
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Signature Footer */}
-          <div className="mt-6 pt-4 border-t border-[#E2DDD5] flex items-center justify-between text-[11px] text-[#3D352F]">
-            <span>Generado por El Chiringuito POS</span>
-            <span>Firma Tesorería / Supervisión: ______________________</span>
-          </div>
-        </div>
-      </div>
-    </Modal>
+      {/* Portal A4 aislado en document.body: único elemento visible durante window.print() */}
+      {typeof document !== 'undefined'
+        ? createPortal(
+            <div id="elarx-print-root" className="hidden print:block">
+              <PrintableReportDocument {...docProps} />
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 };

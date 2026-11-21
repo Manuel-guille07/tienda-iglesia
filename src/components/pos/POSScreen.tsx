@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ProductCatalog } from './ProductCatalog';
 import { QuickCafeteriaKeypad } from './QuickCafeteriaKeypad';
@@ -17,6 +17,7 @@ export const POSScreen: React.FC = () => {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [viewMode, setViewMode] = useState<PosViewMode>('quick');
+  const [pulseTick, setPulseTick] = useState(0);
   const { cart, loadRawMaterials } = usePOSStore();
 
   useEffect(() => {
@@ -35,11 +36,19 @@ export const POSScreen: React.FC = () => {
   const totalCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const totalAmount = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
+  const prevCountRef = useRef(totalCount);
+  useEffect(() => {
+    if (totalCount > prevCountRef.current) {
+      setPulseTick((n) => n + 1);
+    }
+    prevCountRef.current = totalCount;
+  }, [totalCount]);
+
   return (
     <div
       className={cn(
         'p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto w-full max-w-full overflow-x-hidden',
-        cart.length > 0 && 'pb-20 lg:pb-6'
+        cart.length > 0 && 'pb-24 lg:pb-6'
       )}
     >
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start">
@@ -67,15 +76,32 @@ export const POSScreen: React.FC = () => {
             ]}
           />
 
-          {/* Vista Activa: Botones Rápidos + Catálogo debajo, o Catálogo Completo directo */}
-          {viewMode === 'quick' ? (
-            <div className="space-y-4">
-              <QuickCafeteriaKeypad />
-              <ProductCatalog />
-            </div>
-          ) : (
-            <ProductCatalog />
-          )}
+          {/* Transición fluida entre Botones Rápidos y Catálogo Completo (180 ms) */}
+          <AnimatePresence mode="wait" initial={false}>
+            {viewMode === 'quick' ? (
+              <motion.div
+                key="pos-view-quick"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={QL_EASE_OUT}
+                className="space-y-4"
+              >
+                <QuickCafeteriaKeypad />
+                <ProductCatalog />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="pos-view-catalog"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={QL_EASE_OUT}
+              >
+                <ProductCatalog />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Panel del Carrito Fijo en Columna Derecha (Tablets horizontales y PC >= 1024px) */}
@@ -84,21 +110,26 @@ export const POSScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Cápsula Flotante de Cobro en < 1024px: siempre encima de la barra inferior móvil */}
+      {/* Cápsula Flotante de Cobro en < 1024px: siempre encima del Floating Glass Dock */}
       <AnimatePresence>
         {cart.length > 0 && (
           <motion.div
             key="pos-floating-checkout"
-            initial={{ opacity: 0, y: 18, scale: 0.97 }}
+            initial={{ opacity: 0, y: 18, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 14, scale: 0.97 }}
+            exit={{ opacity: 0, y: 14, scale: 0.96 }}
             transition={QL_SPRING_SNAPPY}
-            className="lg:hidden fixed bottom-[calc(var(--ql-mobile-nav-h)+var(--ql-safe-bottom)+10px)] md:bottom-5 left-3 right-3 z-[45] flex justify-center pointer-events-none"
+            className="lg:hidden fixed bottom-[calc(var(--ql-mobile-nav-h)+var(--ql-mobile-dock-gap)+var(--ql-safe-bottom)+10px)] md:bottom-5 left-3.5 right-3.5 z-[45] flex justify-center pointer-events-none"
           >
-            <button
+            <motion.button
+              key={`checkout-pulse-${pulseTick}`}
               type="button"
+              initial={pulseTick > 0 ? { scale: 1.035 } : false}
+              animate={{ scale: 1 }}
+              whileTap={{ scale: 0.975 }}
+              transition={QL_SPRING_SNAPPY}
               onClick={() => setIsMobileCartOpen(true)}
-              className="pointer-events-auto w-full max-w-lg h-[54px] px-4 sm:px-5 rounded-full flex items-center justify-between gap-3 bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-lg)] transition-transform duration-150 active:scale-[0.98] cursor-pointer select-none ql-focus-ring"
+              className="pointer-events-auto w-full max-w-md h-[52px] px-4 sm:px-5 rounded-full flex items-center justify-between gap-3 bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-lg)] cursor-pointer select-none ql-focus-ring"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold ql-num shrink-0 bg-[var(--ql-accent-text)]/15 text-[var(--ql-accent-text)]">
@@ -113,12 +144,12 @@ export const POSScreen: React.FC = () => {
                 <span>Cobrar · {formatCurrency(totalAmount)}</span>
                 <ArrowRight className="w-4 h-4 shrink-0" />
               </div>
-            </button>
+            </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Bottom Sheet del Carrito en < 1024px (z-50: encima de la barra inferior móvil z-40) */}
+      {/* Bottom Sheet del Carrito en < 1024px (z-50: encima del Floating Glass Dock z-40) */}
       <AnimatePresence>
         {isMobileCartOpen && (
           <motion.div

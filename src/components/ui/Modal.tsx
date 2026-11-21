@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/cn';
+import { QL_EASE_OUT, QL_SPRING_SNAPPY } from '../../lib/motion';
 
 interface ModalProps {
   isOpen: boolean;
@@ -33,8 +35,6 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
-
   const maxWidths = {
     sm: 'max-w-sm',
     md: 'max-w-md',
@@ -44,44 +44,60 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/55 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={cn(
-          'w-full rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[92vh] border border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)] transition-colors',
-          maxWidths[maxWidth]
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--ql-hairline)] shrink-0">
-          <div className="min-w-0 pr-2">
-            <h3 className="text-base sm:text-lg font-semibold tracking-tight truncate">{title}</h3>
-            {description && (
-              <p className="text-xs sm:text-sm mt-0.5 text-[var(--ql-text-secondary)]">
-                {description}
-              </p>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="ql-modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={QL_EASE_OUT}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/55 backdrop-blur-sm"
+          onClick={onClose}
+        >
+          <motion.div
+            key="ql-modal-dialog"
+            role="dialog"
+            aria-modal="true"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={QL_SPRING_SNAPPY}
+            className={cn(
+              'w-full rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[92vh] border border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)] transition-colors',
+              maxWidths[maxWidth]
             )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="w-9 h-9 rounded-full bg-[var(--ql-bg-elevated)] border border-[var(--ql-hairline)] text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)] flex items-center justify-center transition-colors cursor-pointer shrink-0 ql-focus-ring"
+            onClick={(e) => e.stopPropagation()}
           >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--ql-hairline)] shrink-0">
+              <div className="min-w-0 pr-2">
+                <h3 className="text-base sm:text-lg font-semibold tracking-tight truncate">
+                  {title}
+                </h3>
+                {description && (
+                  <p className="text-xs sm:text-sm mt-0.5 text-[var(--ql-text-secondary)]">
+                    {description}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Cerrar"
+                className="w-9 h-9 rounded-full bg-[var(--ql-bg-elevated)] border border-[var(--ql-hairline)] text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)] flex items-center justify-center transition-colors cursor-pointer shrink-0 ql-focus-ring"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-        {/* Content */}
-        <div className="p-5 sm:p-6 pb-safe sm:pb-6 overflow-y-auto space-y-4">
-          {children}
-        </div>
-      </div>
-    </div>
+            {/* Content */}
+            <div className="p-5 sm:p-6 pb-safe sm:pb-6 overflow-y-auto space-y-4">
+              {children}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

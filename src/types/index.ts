@@ -43,6 +43,8 @@ export interface RawMaterial {
   price?: number;
   quickColor?: QuickColor;
   quick_color?: QuickColor;
+  imageUrl?: string;
+  image_url?: string;
 }
 
 export interface RecipeItem {
@@ -66,6 +68,8 @@ export interface Product {
   color?: string; // Color tag for UI button
   quickColor?: QuickColor;
   quick_color?: QuickColor;
+  imageUrl?: string;
+  image_url?: string;
 }
 
 export interface CartItem {

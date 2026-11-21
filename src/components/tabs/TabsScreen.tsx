@@ -1,22 +1,20 @@
 import React, { useState } from 'react';
 import { useTabStore } from '../../store/useTabStore';
 import { useLanguage } from '../../context/LanguageContext';
-import { useTheme } from '../../context/ThemeContext';
 import { Users, Search, Plus, MessageSquareShare, CreditCard, Banknote, Pencil } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { SurfaceCard } from '../ui/SurfaceCard';
 import { CustomerTab } from '../../types';
 import { WhatsAppReceiptModal } from './WhatsAppReceiptModal';
 import { NewCustomerModal } from './NewCustomerModal';
 import { EditCustomerModal } from './EditCustomerModal';
-import { parseMoneyInput, roundMoney, toCents } from '../../utils/finance';
+import { formatCurrency, parseMoneyInput, roundMoney, toCents } from '../../utils/finance';
+import { cn } from '../../lib/cn';
 import toast from 'react-hot-toast';
 
 export const TabsScreen: React.FC = () => {
   const { t } = useLanguage();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
   const { customers, addPrepaidBalance, payDebt } = useTabStore();
 
   const [search, setSearch] = useState('');
@@ -65,7 +63,7 @@ export const TabsScreen: React.FC = () => {
       }
       if (toCents(cleanAmount) > toCents(currentDebt)) {
         toast.error(
-          `El abono (${cleanAmount.toFixed(2)}€) no puede superar la deuda actual del cliente (${currentDebt.toFixed(2)}€)`
+          `El abono (${formatCurrency(cleanAmount)}) no puede superar la deuda actual del cliente (${formatCurrency(currentDebt)})`
         );
         return;
       }
@@ -112,50 +110,44 @@ export const TabsScreen: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
-      {/* Cabecera */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2.5">
-            <Users className="w-6 h-6" />
-            {t('tabs.title')}
+    <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-5">
+      {/* Cabecera compacta */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight flex items-center gap-2 text-[var(--ql-text-primary)]">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-[var(--ql-text-secondary)]" />
+            <span className="truncate">{t('tabs.title')}</span>
           </h2>
-          <p className={`text-sm mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+          <p className="text-xs sm:text-sm mt-0.5 text-[var(--ql-text-secondary)]">
             {t('tabs.subtitle')}
           </p>
         </div>
         <Button
           variant="primary"
-          size="md"
+          size="sm"
           icon={<Plus className="w-4 h-4" />}
           onClick={() => setIsNewOpen(true)}
+          className="shrink-0"
         >
-          {t('tabs.newCustomer')}
+          <span className="hidden sm:inline">{t('tabs.newCustomer')}</span>
+          <span className="sm:hidden">Nuevo</span>
         </Button>
       </div>
 
-      {/* Buscador */}
+      {/* Buscador Quiet Luxury */}
       <div className="relative">
-        <Search
-          className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none ${
-            isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-          }`}
-        />
+        <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--ql-text-muted)]" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('tabs.search')}
-          className={`w-full min-h-[52px] pl-12 pr-4 py-3 rounded-full text-base font-medium border focus:outline-none ${
-            isDark
-              ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA] placeholder-[#9A9086] focus:border-[#EFECE6]'
-              : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210] placeholder-[#6E665E] focus:border-[#141210]'
-          }`}
+          className="w-full min-h-[48px] pl-11 pr-4 py-2.5 rounded-full text-sm sm:text-base font-medium border border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] placeholder:text-[var(--ql-text-muted)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-sm)] focus:outline-none focus:border-[var(--ql-hairline-strong)] transition-colors"
         />
       </div>
 
       {/* Tarjetas de Clientes Quiet Luxury */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
         {filtered.map((c) => {
           const groupLabel =
             [c.congregation, c.ministry].filter(Boolean).join(' · ') ||
@@ -164,18 +156,13 @@ export const TabsScreen: React.FC = () => {
           const phoneLabel = c.phone && c.phone.trim() ? c.phone.trim() : 'Sin teléfono';
 
           return (
-            <div
-              key={c.id}
-              className={`rounded-3xl p-5 space-y-4 border transition ${
-                isDark
-                  ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
-                  : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
-              }`}
-            >
+            <SurfaceCard key={c.id} padding="md" radius="xl" className="space-y-3.5">
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0">
-                  <h3 className="text-lg font-medium leading-snug break-words">{c.name}</h3>
-                  <span className={`text-xs font-medium block mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+                  <h3 className="text-base sm:text-lg font-semibold leading-snug break-words text-[var(--ql-text-primary)]">
+                    {c.name}
+                  </h3>
+                  <span className="text-xs font-medium block mt-0.5 text-[var(--ql-text-secondary)]">
                     {groupLabel} · {phoneLabel}
                   </span>
                 </div>
@@ -188,14 +175,10 @@ export const TabsScreen: React.FC = () => {
                       setCust(c);
                       setIsEditOpen(true);
                     }}
-                    className={`min-h-[40px] px-3 rounded-full border flex items-center justify-center gap-1.5 text-xs font-semibold transition cursor-pointer ${
-                      isDark
-                        ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] hover:border-[#EFECE6]'
-                        : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] hover:border-[#141210]'
-                    }`}
+                    className="h-9 px-2.5 rounded-full border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)] text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)] hover:border-[var(--ql-hairline-strong)] flex items-center justify-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ql-focus-ring"
                   >
                     <Pencil className="w-3.5 h-3.5" />
-                    <span>Editar Perfil</span>
+                    <span className="hidden sm:inline">Editar</span>
                   </button>
                   <button
                     type="button"
@@ -206,48 +189,50 @@ export const TabsScreen: React.FC = () => {
                       setLastAbonoAmount(null);
                       setIsReceiptOpen(true);
                     }}
-                    className={`w-10 h-10 rounded-full border flex items-center justify-center transition cursor-pointer shrink-0 ${
-                      isDark
-                        ? 'bg-[#211D1A] border-[#2A2420] text-emerald-400 hover:border-emerald-500'
-                        : 'bg-[#EFECE6] border-[#E2DDD5] text-emerald-800 hover:border-emerald-600'
-                    }`}
+                    className="w-9 h-9 rounded-full border border-[var(--ql-hairline)] bg-[var(--ql-tone-sage-soft)] text-[var(--ql-tone-sage)] hover:border-[var(--ql-hairline-strong)] flex items-center justify-center transition-colors cursor-pointer shrink-0 ql-focus-ring"
                   >
                     <MessageSquareShare className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              <div
-                className={`grid grid-cols-2 gap-3 p-3.5 rounded-2xl border ${
-                  isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
-                }`}
-              >
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)]">
                 <div>
-                  <span className={`text-xs block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+                  <span className="text-[11px] font-medium block text-[var(--ql-text-secondary)]">
                     Saldo Prepago
                   </span>
-                  <span className="text-lg font-semibold tabular-nums text-emerald-500">
-                    {c.balance.toFixed(2)} €
+                  <span
+                    className={cn(
+                      'text-lg font-semibold ql-num block mt-0.5',
+                      c.balance > 0
+                        ? 'text-[var(--ql-tone-sage)]'
+                        : 'text-[var(--ql-text-muted)]'
+                    )}
+                  >
+                    {formatCurrency(c.balance)}
                   </span>
                 </div>
                 <div>
-                  <span className={`text-xs block ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+                  <span className="text-[11px] font-medium block text-[var(--ql-text-secondary)]">
                     Deuda Pendiente
                   </span>
                   <span
-                    className={`text-lg font-semibold tabular-nums ${
-                      c.debt > 0 ? 'text-rose-500' : isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-                    }`}
+                    className={cn(
+                      'text-lg font-semibold ql-num block mt-0.5',
+                      c.debt > 0
+                        ? 'text-[var(--ql-tone-terracotta)]'
+                        : 'text-[var(--ql-text-muted)]'
+                    )}
                   >
-                    {c.debt.toFixed(2)} €
+                    {formatCurrency(c.debt)}
                   </span>
                 </div>
               </div>
 
-              <div className="flex gap-2.5 pt-1">
+              <div className="flex gap-2 pt-0.5">
                 <Button
-                  variant="outline"
-                  size="md"
+                  variant="subtle"
+                  size="sm"
                   className="flex-1"
                   onClick={() => {
                     setCust(c);
@@ -262,7 +247,7 @@ export const TabsScreen: React.FC = () => {
                 {c.debt > 0 && (
                   <Button
                     variant="primary"
-                    size="md"
+                    size="sm"
                     className="flex-1"
                     onClick={() => {
                       setCust(c);
@@ -276,7 +261,7 @@ export const TabsScreen: React.FC = () => {
                   </Button>
                 )}
               </div>
-            </div>
+            </SurfaceCard>
           );
         })}
       </div>
@@ -305,11 +290,7 @@ export const TabsScreen: React.FC = () => {
       >
         <div className="space-y-4">
           <div>
-            <label
-              className={`text-sm font-medium block mb-1.5 ${
-                isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-              }`}
-            >
+            <label className="text-xs sm:text-sm font-medium block mb-1.5 text-[var(--ql-text-secondary)]">
               {action === 'pay' ? 'Monto a Abonar (€)' : 'Monto a Cargar (€)'}
             </label>
             <input
@@ -337,20 +318,19 @@ export const TabsScreen: React.FC = () => {
                 setAmountDraft(String(safeVal));
                 setAmount(safeVal);
               }}
-              className={`w-full min-h-[52px] rounded-2xl p-3.5 text-2xl font-bold tabular-nums border focus:outline-none ${
-                isDark
-                  ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] focus:border-[#EFECE6]'
-                  : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] focus:border-[#141210]'
-              }`}
+              className="w-full min-h-[52px] rounded-2xl px-4 py-3 text-2xl font-semibold ql-num border border-[var(--ql-hairline-strong)] bg-[var(--ql-bg-elevated)] text-[var(--ql-text-primary)] focus:outline-none focus:border-[var(--ql-text-primary)] transition-colors"
             />
             {action === 'pay' && cust && (
-              <div className="flex items-center justify-between mt-1.5">
-                <p className={`text-xs ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
-                  Deuda actual pendiente: <strong className="text-rose-500">{cust.debt.toFixed(2)} €</strong>
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 ql-num">
+                <p className="text-xs text-[var(--ql-text-secondary)]">
+                  Deuda actual pendiente:{' '}
+                  <strong className="text-[var(--ql-tone-terracotta)]">
+                    {formatCurrency(cust.debt)}
+                  </strong>
                 </p>
                 {toCents(amount) > toCents(cust.debt) && (
-                  <span className="text-xs text-rose-500 font-semibold">
-                    Excede la deuda máxima ({cust.debt.toFixed(2)} €)
+                  <span className="text-xs text-[var(--ql-tone-terracotta)] font-semibold">
+                    Excede la deuda máxima ({formatCurrency(cust.debt)})
                   </span>
                 )}
               </div>
@@ -358,11 +338,7 @@ export const TabsScreen: React.FC = () => {
           </div>
 
           <div>
-            <label
-              className={`text-sm font-medium block mb-2 ${
-                isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-              }`}
-            >
+            <label className="text-xs sm:text-sm font-medium block mb-2 text-[var(--ql-text-secondary)]">
               Método de Cobro Recibido
             </label>
             <div className="grid grid-cols-2 gap-2.5">
@@ -378,17 +354,14 @@ export const TabsScreen: React.FC = () => {
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => setPaymentMethod(m.id)}
-                    className={`min-h-[48px] py-2.5 px-4 rounded-2xl border flex items-center justify-center gap-2 text-base font-medium transition cursor-pointer disabled:opacity-50 ${
+                    className={cn(
+                      'min-h-[46px] py-2.5 px-4 rounded-2xl border flex items-center justify-center gap-2 text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 ql-focus-ring',
                       active
-                        ? isDark
-                          ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
-                          : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
-                        : isDark
-                        ? 'bg-[#211D1A] border-[#2A2420] text-[#9A9086]'
-                        : 'bg-[#EFECE6] border-[#E2DDD5] text-[#6E665E]'
-                    }`}
+                        ? 'bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] border-transparent font-semibold [box-shadow:var(--ql-shadow-sm)]'
+                        : 'bg-[var(--ql-bg-elevated)] border-[var(--ql-hairline)] text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)]'
+                    )}
                   >
-                    <Icon className="w-5 h-5" /> {m.label}
+                    <Icon className="w-4 h-4" /> {m.label}
                   </button>
                 );
               })}

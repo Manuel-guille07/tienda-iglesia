@@ -196,7 +196,14 @@ export const AppLayout: React.FC = () => {
       <Header />
       <Navigation />
       <main className="flex-1 w-full max-w-full overflow-x-hidden pb-mobile-nav md:pb-10">
-        <Outlet />
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={QL_EASE_OUT}
+        >
+          <Outlet />
+        </motion.div>
       </main>
 
       {typeof document !== 'undefined'

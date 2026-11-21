@@ -132,15 +132,17 @@ export const Navigation: React.FC = () => {
         </div>
       </nav>
 
-      {/* Móvil (< 768px): Barra inferior fija estilo app nativa iOS */}
+      {/* Móvil (< 768px): Floating Glass Dock */}
       <nav
         aria-label="Navegación inferior"
-        style={{ paddingBottom: 'var(--ql-safe-bottom)' }}
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 ql-glass border-t border-[var(--ql-hairline)] [box-shadow:0_-1px_0_var(--ql-hairline),0_-8px_24px_-12px_rgba(20,18,16,0.12)]"
+        style={{
+          paddingBottom: 'calc(var(--ql-safe-bottom) + var(--ql-mobile-dock-gap))',
+        }}
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 px-3.5 pointer-events-none"
       >
         <div
           className={cn(
-            'grid w-full max-w-lg mx-auto h-[var(--ql-mobile-nav-h)] px-2',
+            'pointer-events-auto mx-auto max-w-md h-[var(--ql-mobile-nav-h)] rounded-[26px] ql-dock-glass px-1.5 grid items-center',
             isAdminOrSupervisor ? 'grid-cols-4' : 'grid-cols-3'
           )}
         >
@@ -157,33 +159,28 @@ export const Navigation: React.FC = () => {
                 onClick={() => handleSelectNav(item.id)}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'relative flex flex-col items-center justify-center gap-1 min-w-0 cursor-pointer select-none ql-focus-ring rounded-xl transition-colors duration-150',
+                  'relative h-[50px] flex flex-col items-center justify-center gap-0.5 min-w-0 cursor-pointer select-none ql-focus-ring rounded-[20px] transition-colors duration-150',
                   isActive
-                    ? 'text-[var(--ql-text-primary)]'
-                    : 'text-[var(--ql-text-muted)] hover:text-[var(--ql-text-secondary)]'
+                    ? 'text-[var(--ql-accent-text)]'
+                    : 'text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)]'
                 )}
               >
-                <span className="relative flex items-center justify-center w-12 h-7">
-                  {isActive && (
-                    <motion.span
-                      layoutId="ql-mobile-nav-pill"
-                      transition={QL_SPRING_SNAPPY}
-                      aria-hidden="true"
-                      className="absolute inset-0 rounded-full bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
-                    />
-                  )}
-                  <Icon
-                    className={cn(
-                      'relative z-10 w-[18px] h-[18px] shrink-0 transition-colors',
-                      isActive && 'text-[var(--ql-accent-text)]'
-                    )}
-                    strokeWidth={isActive ? 2.2 : 1.85}
+                {isActive && (
+                  <motion.span
+                    layoutId="ql-mobile-dock-pill"
+                    transition={QL_SPRING_SNAPPY}
+                    aria-hidden="true"
+                    className="absolute inset-0.5 rounded-[19px] bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
                   />
-                </span>
+                )}
+                <Icon
+                  className="relative z-10 w-[18px] h-[18px] shrink-0"
+                  strokeWidth={isActive ? 2.15 : 1.8}
+                />
                 <span
                   className={cn(
-                    'text-[11px] leading-none truncate max-w-full',
-                    isActive ? 'font-semibold text-[var(--ql-text-primary)]' : 'font-medium'
+                    'relative z-10 text-[10.5px] leading-none truncate max-w-full',
+                    isActive ? 'font-semibold' : 'font-medium'
                   )}
                 >
                   {item.label}
@@ -202,35 +199,28 @@ export const Navigation: React.FC = () => {
               aria-expanded={isGestionOpen}
               aria-label="Abrir menú de Gestión"
               className={cn(
-                'relative flex flex-col items-center justify-center gap-1 min-w-0 cursor-pointer select-none ql-focus-ring rounded-xl transition-colors duration-150',
+                'relative h-[50px] flex flex-col items-center justify-center gap-0.5 min-w-0 cursor-pointer select-none ql-focus-ring rounded-[20px] transition-colors duration-150',
                 activeNavId === 'gestion'
-                  ? 'text-[var(--ql-text-primary)]'
-                  : 'text-[var(--ql-text-muted)] hover:text-[var(--ql-text-secondary)]'
+                  ? 'text-[var(--ql-accent-text)]'
+                  : 'text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)]'
               )}
             >
-              <span className="relative flex items-center justify-center w-12 h-7">
-                {activeNavId === 'gestion' && (
-                  <motion.span
-                    layoutId="ql-mobile-nav-pill"
-                    transition={QL_SPRING_SNAPPY}
-                    aria-hidden="true"
-                    className="absolute inset-0 rounded-full bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
-                  />
-                )}
-                <LayoutGrid
-                  className={cn(
-                    'relative z-10 w-[18px] h-[18px] shrink-0 transition-colors',
-                    activeNavId === 'gestion' && 'text-[var(--ql-accent-text)]'
-                  )}
-                  strokeWidth={activeNavId === 'gestion' ? 2.2 : 1.85}
+              {activeNavId === 'gestion' && (
+                <motion.span
+                  layoutId="ql-mobile-dock-pill"
+                  transition={QL_SPRING_SNAPPY}
+                  aria-hidden="true"
+                  className="absolute inset-0.5 rounded-[19px] bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
                 />
-              </span>
+              )}
+              <LayoutGrid
+                className="relative z-10 w-[18px] h-[18px] shrink-0"
+                strokeWidth={activeNavId === 'gestion' ? 2.15 : 1.8}
+              />
               <span
                 className={cn(
-                  'text-[11px] leading-none truncate max-w-full',
-                  activeNavId === 'gestion'
-                    ? 'font-semibold text-[var(--ql-text-primary)]'
-                    : 'font-medium'
+                  'relative z-10 text-[10.5px] leading-none truncate max-w-full',
+                  activeNavId === 'gestion' ? 'font-semibold' : 'font-medium'
                 )}
               >
                 Gestión
