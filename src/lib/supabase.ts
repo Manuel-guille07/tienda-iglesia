@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const rawUrl = "https://rjeklfwxuryiktwodbfg.supabase.co";
-const rawKey = "[eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqZWtsZnd4dXJ5aWt0d29kYmZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzNTI0NTIsImV4cCI6MjEwOTkyODQ1Mn0.l5EEjpRvohSAHccb4hsMaFl3-vnZRAZKxyJnscIjTYM]";
+const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Validar que sea una URL HTTP/HTTPS real y bien formada
 const isValidUrl = (url: any): boolean => {
