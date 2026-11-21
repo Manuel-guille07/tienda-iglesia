@@ -1,83 +1,72 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { usePOSStore, getProductStockInfo } from '../../store/usePOSStore';
-import { useTheme } from '../../context/ThemeContext';
-import { QuickColor } from '../../types';
-import { Plus, AlertTriangle, Ban } from 'lucide-react';
+import { Product, QuickColor } from '../../types';
 import { SurfaceCard } from '../ui/SurfaceCard';
+import { formatCurrencyParts } from '../../utils/finance';
+import { QL_SPRING_TACTILE } from '../../lib/motion';
+import { cn } from '../../lib/cn';
+import { AlertTriangle, Ban } from 'lucide-react';
 
-const LEGACY_TOKEN_TO_HEX: Record<string, string> = {
-  sage: '#059669',
-  slate: '#0284C7',
-  terracotta: '#E11D48',
-  amber: '#D97706',
-  mauve: '#7C3AED',
+type MineralTone = 'sage' | 'slate' | 'amber' | 'plum' | 'terracotta' | 'neutral';
+
+const TONE_DOT_COLOR: Record<MineralTone, string> = {
+  sage: 'var(--ql-tone-sage)',
+  slate: 'var(--ql-tone-slate)',
+  amber: 'var(--ql-tone-amber)',
+  plum: 'var(--ql-tone-plum)',
+  terracotta: 'var(--ql-tone-terracotta)',
+  neutral: 'var(--ql-text-muted)',
 };
 
-const HEX_REGEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+function resolveProductTone(product: Product): MineralTone {
+  const rawColor = String(product.quickColor || product.quick_color || '')
+    .trim()
+    .toLowerCase() as QuickColor;
 
-function normalizeHex(raw?: string): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (trimmed === 'default' || !trimmed) return null;
-  if (LEGACY_TOKEN_TO_HEX[trimmed.toLowerCase()]) {
-    return LEGACY_TOKEN_TO_HEX[trimmed.toLowerCase()];
+  if (rawColor === 'sage') return 'sage';
+  if (rawColor === 'slate') return 'slate';
+  if (rawColor === 'amber') return 'amber';
+  if (rawColor === 'mauve' || rawColor === 'plum') return 'plum';
+  if (rawColor === 'terracotta') return 'terracotta';
+
+  const cat = String(product.category || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  if (cat === 'cafes') return 'amber';
+  if (cat === 'bebidas') return 'slate';
+  if (cat === 'cafeteria') return 'sage';
+  if (cat === 'snacks') return 'plum';
+  if (cat === 'donativos') return 'terracotta';
+  if (cat === 'merchandising') return 'slate';
+
+  // Mapeo discreto para colores hex personalizados previos sin pintar bloques chillones
+  if (rawColor.startsWith('#')) {
+    if (rawColor.includes('0596') || rawColor.includes('10b9') || rawColor.includes('16a3')) return 'sage';
+    if (rawColor.includes('0284') || rawColor.includes('2563') || rawColor.includes('0ea5')) return 'slate';
+    if (rawColor.includes('d977') || rawColor.includes('f59e') || rawColor.includes('ea58')) return 'amber';
+    if (rawColor.includes('7c3a') || rawColor.includes('9333') || rawColor.includes('8b5c')) return 'plum';
+    if (rawColor.includes('e11d') || rawColor.includes('dc26') || rawColor.includes('f43f')) return 'terracotta';
   }
-  if (!HEX_REGEX.test(trimmed)) return null;
-  if (trimmed.length === 4) {
-    return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toUpperCase();
-  }
-  return trimmed.toUpperCase();
-}
 
-function parseHexRgb(hex: string): { r: number; g: number; b: number } {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.substring(0, 2), 16);
-  const g = parseInt(clean.substring(2, 4), 16);
-  const b = parseInt(clean.substring(4, 6), 16);
-  return { r, g, b };
-}
-
-export function hexToRgba(hex: string, alpha: number): string {
-  const { r, g, b } = parseHexRgb(hex);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function getRelativeLuminance(hex: string): number {
-  const { r, g, b } = parseHexRgb(hex);
-  const toLinear = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-  };
-  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-}
-
-function getGlassColorTokens(hex: string, isDark: boolean) {
-  const lum = getRelativeLuminance(hex);
-  // Texto principal con contraste garantizado en claro y oscuro
-  const textColor = isDark
-    ? lum < 0.14
-      ? '#F4F0EA'
-      : hex
-    : lum > 0.48
-    ? '#141210'
-    : hex;
-
-  // Contraste del icono '+' sobre el círculo sólido con el color HEX elegido
-  const plusIconColor = lum > 0.48 ? '#141210' : '#FFFFFF';
-
-  return {
-    backgroundColor: hexToRgba(hex, 0.15),
-    borderColor: hexToRgba(hex, 0.3),
-    textColor,
-    plusBgColor: hex,
-    plusIconColor,
-  };
+  return 'neutral';
 }
 
 export const QuickCafeteriaKeypad: React.FC = () => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
   const { products, rawMaterials, cart, addToCart } = usePOSStore();
+  const [tappedId, setTappedId] = useState<string | null>(null);
+  const tapTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (tapTimerRef.current !== null) {
+        window.clearTimeout(tapTimerRef.current);
+      }
+    };
+  }, []);
 
   const sellableProducts = products.filter((p) => p.isSellable !== false);
   const explicitPresets = sellableProducts.filter((p) => p.isQuickAccess || p.isPreset);
@@ -88,9 +77,20 @@ export const QuickCafeteriaKeypad: React.FC = () => {
     return item ? item.quantity : 0;
   };
 
+  const handleQuickAdd = (product: Product) => {
+    addToCart(product);
+    setTappedId(product.id);
+    if (tapTimerRef.current !== null) {
+      window.clearTimeout(tapTimerRef.current);
+    }
+    tapTimerRef.current = window.setTimeout(() => {
+      setTappedId((prev) => (prev === product.id ? null : prev));
+    }, 200);
+  };
+
   if (presets.length === 0) {
     return (
-      <SurfaceCard padding="lg" radius="xl" className="text-center">
+      <SurfaceCard variant="default" padding="lg" radius="xl" className="text-center">
         <p className="text-sm font-medium text-[var(--ql-text-secondary)]">
           No hay productos rápidos disponibles.
         </p>
@@ -99,128 +99,97 @@ export const QuickCafeteriaKeypad: React.FC = () => {
   }
 
   return (
-    <SurfaceCard padding="sm" radius="xl" className="sm:p-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
+    <SurfaceCard variant="elevated" padding="none" radius="xl" className="p-2.5 sm:p-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-2.5">
         {presets.map((product) => {
           const stockInfo = getProductStockInfo(product, rawMaterials);
           const isOut = stockInfo.status === 'out';
           const isLow = stockInfo.status === 'low';
           const qtyInCart = getCartQuantity(product.id);
-          const hexColor = normalizeHex(
-            (product.quickColor || product.quick_color) as QuickColor | undefined
-          );
-          const glass = hexColor ? getGlassColorTokens(hexColor, isDark) : null;
-
-          const defaultSurfaceClasses = isDark
-            ? 'bg-[#211D1A] text-[#F4F0EA] border-[#2A2420] hover:border-[#3D352F] shadow-md shadow-black/40'
-            : 'bg-[#EFECE6] text-[#141210] border-[#E2DDD5] hover:border-[#CFC8BC] shadow-sm';
-
-          const activeRingClass =
-            qtyInCart > 0
-              ? isDark
-                ? 'ring-2 ring-[#EFECE6]'
-                : 'ring-2 ring-[#141210]'
-              : '';
+          const tone = resolveProductTone(product);
+          const priceParts = formatCurrencyParts(product.price);
+          const isFlashing = tappedId === product.id;
 
           return (
-            <button
+            <motion.button
               key={product.id}
               type="button"
               disabled={isOut}
-              onClick={() => addToCart(product)}
-              style={
-                !isOut && glass
-                  ? {
-                      backgroundColor: glass.backgroundColor,
-                      borderColor: glass.borderColor,
-                      color: glass.textColor,
-                    }
-                  : undefined
-              }
-              className={`group relative rounded-3xl p-4 text-left flex flex-col justify-between min-h-[132px] border transition-all duration-150 select-none ${
+              whileTap={isOut ? undefined : { scale: 0.97 }}
+              transition={QL_SPRING_TACTILE}
+              onClick={() => handleQuickAdd(product)}
+              aria-label={`Añadir ${product.name}, ${priceParts.full}`}
+              className={cn(
+                'group relative rounded-[14px] sm:rounded-2xl p-3.5 text-left flex flex-col justify-between min-h-[104px] sm:min-h-[112px] border transition-colors duration-150 select-none ql-focus-ring',
                 isOut
-                  ? isDark
-                    ? 'bg-[#171412]/60 border-[#2A2420] text-[#9A9086] opacity-45 cursor-not-allowed'
-                    : 'bg-[#FAF8F5]/60 border-[#E2DDD5] text-[#6E665E] opacity-50 cursor-not-allowed'
-                  : glass
-                  ? `backdrop-blur-md shadow-md active:scale-[0.98] cursor-pointer ${activeRingClass}`
-                  : `${defaultSurfaceClasses} ${activeRingClass} active:scale-[0.98] cursor-pointer`
-              }`}
+                  ? 'bg-[var(--ql-bg-card)]/60 border-[var(--ql-hairline)] text-[var(--ql-text-muted)] opacity-50 cursor-not-allowed'
+                  : cn(
+                      'bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-sm)] cursor-pointer',
+                      isFlashing
+                        ? 'border-[var(--ql-text-primary)]/50'
+                        : qtyInCart > 0
+                        ? 'border-[var(--ql-hairline-strong)] ring-1 ring-[var(--ql-text-primary)]/20'
+                        : 'border-[var(--ql-hairline)] hover:border-[var(--ql-hairline-strong)]'
+                    )
+              )}
             >
-              {/* Fila superior: Nombre del producto + Insignia de cantidad en carrito */}
+              {/* Fila superior: micro-indicador mineral + nombre (máx. 2 líneas) + badge vivo de cantidad */}
               <div className="flex items-start justify-between gap-2 w-full">
-                <span className="text-base sm:text-lg font-semibold leading-snug line-clamp-2 pr-1">
-                  {product.name}
-                </span>
-
-                {qtyInCart > 0 && (
+                <div className="min-w-0 flex items-start gap-2">
                   <span
-                    style={
-                      !isOut && glass
-                        ? {
-                            backgroundColor: glass.plusBgColor,
-                            color: glass.plusIconColor,
-                          }
-                        : undefined
-                    }
-                    className={`shrink-0 px-2.5 py-0.5 rounded-full text-xs font-bold tabular-nums ${
-                      !glass
-                        ? isDark
-                          ? 'bg-[#EFECE6] text-[#141210]'
-                          : 'bg-[#141210] text-[#FAF8F5]'
-                        : ''
-                    }`}
-                  >
-                    x{qtyInCart}
+                    aria-hidden="true"
+                    className="w-1.5 h-1.5 rounded-full shrink-0 mt-[7px]"
+                    style={{ backgroundColor: isOut ? 'var(--ql-text-muted)' : TONE_DOT_COLOR[tone] }}
+                  />
+                  <span className="text-[14px] sm:text-[15px] font-medium leading-snug tracking-tight line-clamp-2 text-[var(--ql-text-primary)]">
+                    {product.name}
                   </span>
-                )}
-              </div>
-
-              {/* Fila inferior: Precio grande + Estado de stock + Botón + */}
-              <div className="flex items-end justify-between gap-2 w-full mt-3 pt-2">
-                <div>
-                  <span className="text-xl font-bold tracking-tight tabular-nums block">
-                    {product.price.toFixed(2)} €
-                  </span>
-
-                  {isOut ? (
-                    <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-rose-500">
-                      <Ban className="w-3.5 h-3.5" />
-                      Agotado
-                    </span>
-                  ) : isLow ? (
-                    <span className="inline-flex items-center gap-1 mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Quedan {stockInfo.availableUnits}
-                    </span>
-                  ) : null}
                 </div>
 
-                <span
-                  style={
-                    !isOut && glass
-                      ? {
-                          backgroundColor: glass.plusBgColor,
-                          color: glass.plusIconColor,
-                        }
-                      : undefined
-                  }
-                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 transition-transform group-active:scale-95 ${
-                    isOut
-                      ? isDark
-                        ? 'bg-[#171412] text-[#9A9086]'
-                        : 'bg-[#FAF8F5] text-[#6E665E]'
-                      : !glass
-                      ? isDark
-                        ? 'bg-[#EFECE6] text-[#141210]'
-                        : 'bg-[#141210] text-[#FAF8F5]'
-                      : 'shadow-sm'
-                  }`}
-                >
-                  {isOut ? <Ban className="w-4 h-4" /> : <Plus className="w-5 h-5" />}
-                </span>
+                <AnimatePresence mode="popLayout">
+                  {qtyInCart > 0 && (
+                    <motion.span
+                      key={qtyInCart}
+                      initial={{ scale: 0.72, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.72, opacity: 0 }}
+                      transition={QL_SPRING_TACTILE}
+                      className="shrink-0 min-w-[24px] h-[22px] px-1.5 rounded-full inline-flex items-center justify-center text-[11px] font-semibold ql-num bg-[var(--ql-accent-bg)] text-[var(--ql-accent-text)] [box-shadow:var(--ql-shadow-sm)]"
+                    >
+                      ×{qtyInCart}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </div>
-            </button>
+
+              {/* Fila inferior: precio editorial tabular-nums + aviso discreto de stock si aplica */}
+              <div className="flex items-end justify-between gap-2 w-full mt-3 pt-1">
+                <span
+                  aria-hidden="true"
+                  className="ql-num text-lg sm:text-[20px] font-semibold leading-none text-[var(--ql-text-primary)]"
+                >
+                  {priceParts.integer}
+                  <span className="text-[0.76em] font-medium text-[var(--ql-text-secondary)]">
+                    {priceParts.decimal}
+                  </span>
+                  <span className="text-[0.7em] font-medium text-[var(--ql-text-muted)] ml-0.5">
+                    {priceParts.symbol}
+                  </span>
+                </span>
+
+                {isOut ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--ql-tone-terracotta)] shrink-0">
+                    <Ban className="w-3 h-3" />
+                    Agotado
+                  </span>
+                ) : isLow ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--ql-tone-amber)] ql-num shrink-0">
+                    <AlertTriangle className="w-3 h-3" />
+                    {stockInfo.availableUnits}
+                  </span>
+                ) : null}
+              </div>
+            </motion.button>
           );
         })}
       </div>

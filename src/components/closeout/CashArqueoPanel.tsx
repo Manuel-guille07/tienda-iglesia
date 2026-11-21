@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/Button';
-import { useTheme } from '../../context/ThemeContext';
-import { parseMoneyInput, toCents } from '../../utils/finance';
+import { SurfaceCard } from '../ui/SurfaceCard';
+import { formatCurrency, parseMoneyInput, toCents } from '../../utils/finance';
+import { cn } from '../../lib/cn';
 
 interface CashArqueoPanelProps {
   expectedCash: number;
@@ -26,9 +27,6 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
   onConfirmClose,
   isSubmitting = false,
 }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
   const [draft, setDraft] = useState<string>(Number.isFinite(counted) ? String(counted) : '');
 
   useEffect(() => {
@@ -42,59 +40,55 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
     }
   }, [counted]);
 
-  return (
-    <div
-      className={`rounded-3xl p-5 sm:p-6 space-y-4 border ${
-        isDark
-          ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
-          : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
-      }`}
-    >
-      <h3 className="text-lg font-semibold tracking-tight">Arqueo de Efectivo Físico</h3>
+  const isExact = toCents(difference) === 0;
 
-      <div
-        className={`p-4 rounded-2xl border space-y-2.5 ${
-          isDark ? 'bg-[#211D1A] border-[#2A2420]' : 'bg-[#EFECE6] border-[#E2DDD5]'
-        }`}
-      >
+  return (
+    <SurfaceCard padding="md" radius="xl" className="sm:p-6 space-y-4">
+      <h3 className="text-base sm:text-lg font-semibold tracking-tight text-[var(--ql-text-primary)]">
+        Arqueo de Efectivo Físico
+      </h3>
+
+      <div className="p-4 rounded-2xl border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)] space-y-2.5">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1 text-sm">
-          <span className="font-medium whitespace-normal break-words">Efectivo total esperado en caja:</span>
-          <strong className="text-lg font-bold tabular-nums">{expectedCash.toFixed(2)} €</strong>
+          <span className="font-medium text-[var(--ql-text-secondary)]">
+            Efectivo total esperado en caja
+          </span>
+          <strong className="text-lg font-semibold ql-num text-[var(--ql-text-primary)]">
+            {formatCurrency(expectedCash)}
+          </strong>
         </div>
 
-        <div
-          className={`pt-2 border-t flex flex-col gap-1.5 text-xs text-surface-500 whitespace-normal break-words ${
-            isDark ? 'border-[#2A2420] text-[#9A9086]' : 'border-[#E2DDD5] text-[#6E665E]'
-          }`}
-        >
+        <div className="pt-2.5 border-t border-[var(--ql-hairline)] flex flex-col gap-1.5 text-xs text-[var(--ql-text-secondary)]">
           <div className="flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5">
-            <span className="whitespace-normal break-words">• Ventas de Hoy (Efectivo):</span>
-            <span className="font-medium tabular-nums">{salesCash.toFixed(2)} €</span>
+            <span>Ventas del turno (efectivo)</span>
+            <span className="font-medium ql-num text-[var(--ql-text-primary)]">
+              {formatCurrency(salesCash)}
+            </span>
           </div>
           <div className="flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5">
-            <span className="whitespace-normal break-words">• Abonos Recibidos (Deudas previas):</span>
-            <span className="font-medium tabular-nums">+{tabPaymentsCash.toFixed(2)} €</span>
+            <span>Abonos recibidos (deudas previas)</span>
+            <span className="font-medium ql-num text-[var(--ql-text-primary)]">
+              {formatCurrency(tabPaymentsCash, { showSign: tabPaymentsCash > 0 })}
+            </span>
           </div>
           <div className="flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5">
-            <span className="whitespace-normal break-words">• Donativos en efectivo:</span>
-            <span className="font-medium tabular-nums">+{donativosCash.toFixed(2)} €</span>
+            <span>Donativos en efectivo</span>
+            <span className="font-medium ql-num text-[var(--ql-text-primary)]">
+              {formatCurrency(donativosCash, { showSign: donativosCash > 0 })}
+            </span>
           </div>
         </div>
       </div>
 
       <div>
-        <label
-          className={`text-sm font-medium block mb-1.5 ${
-            isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'
-          }`}
-        >
-          Efectivo físico contado en gaveta (€):
+        <label className="text-xs sm:text-sm font-medium text-[var(--ql-text-secondary)] block mb-1.5">
+          Efectivo físico contado en gaveta (€)
         </label>
         <input
           type="text"
           inputMode="decimal"
           value={draft}
-          placeholder="0.00"
+          placeholder="0,00"
           onFocus={(e) => e.target.select()}
           onChange={(e) => {
             const raw = e.target.value;
@@ -116,30 +110,25 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
             setDraft(String(safeVal));
             onCountedChange(safeVal);
           }}
-          className={`w-full min-h-[52px] rounded-2xl p-3.5 text-2xl font-bold tabular-nums border focus:outline-none ${
-            isDark
-              ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] focus:border-[#EFECE6]'
-              : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] focus:border-[#141210]'
-          }`}
+          className="w-full min-h-[52px] rounded-2xl px-4 py-3 text-2xl font-semibold ql-num border border-[var(--ql-hairline-strong)] bg-[var(--ql-bg-elevated)] text-[var(--ql-text-primary)] focus:outline-none focus:border-[var(--ql-text-primary)] transition-colors"
         />
       </div>
 
-      <div
-        className={`p-3.5 rounded-2xl border flex justify-between text-sm items-center ${
-          isDark ? 'border-[#2A2420]' : 'border-[#E2DDD5]'
-        }`}
-      >
-        <span>Diferencia / Descuadre:</span>
+      <div className="px-4 py-3 rounded-2xl border border-[var(--ql-hairline)] bg-[var(--ql-bg-elevated)]/60 flex justify-between text-sm items-center gap-2">
+        <span className="text-[var(--ql-text-secondary)]">Diferencia / Descuadre</span>
         <strong
-          className={`text-base tabular-nums ${
-            difference === 0 ? 'text-emerald-500' : 'text-rose-500'
-          }`}
+          className={cn(
+            'text-sm sm:text-base font-semibold ql-num',
+            isExact
+              ? 'text-[var(--ql-tone-sage)]'
+              : 'text-[var(--ql-tone-terracotta)]'
+          )}
         >
           {difference > 0
-            ? `+${difference.toFixed(2)} € (Sobrante)`
+            ? `${formatCurrency(difference, { showSign: true })} (Sobrante)`
             : difference < 0
-            ? `${difference.toFixed(2)} € (Faltante)`
-            : '0.00 € (Exacto)'}
+            ? `${formatCurrency(difference)} (Faltante)`
+            : `${formatCurrency(0)} (Exacto)`}
         </strong>
       </div>
 
@@ -153,6 +142,6 @@ export const CashArqueoPanel: React.FC<CashArqueoPanelProps> = ({
       >
         Confirmar y Cerrar Turno
       </Button>
-    </div>
+    </SurfaceCard>
   );
 };
