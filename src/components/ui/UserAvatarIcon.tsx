@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, Coffee, Crown, Shield, Wallet, Heart } from 'lucide-react';
+import { cn } from '../../lib/cn';
 
 export const AVATAR_ICON_KEYS = ['user', 'coffee', 'crown', 'shield', 'wallet', 'heart'] as const;
 export type AvatarIconKey = (typeof AVATAR_ICON_KEYS)[number];
@@ -34,48 +35,57 @@ export function sanitizeAvatarKey(raw?: string | null): AvatarIconKey {
 
 interface UserAvatarIconProps {
   icon?: string | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
+  tone?: 'mineral' | 'neutral';
   className?: string;
 }
 
 export const UserAvatarIcon: React.FC<UserAvatarIconProps> = ({
   icon,
   size = 'md',
+  tone = 'mineral',
   className = '',
 }) => {
   const key = sanitizeAvatarKey(icon);
 
   const containerSize =
-    size === 'sm'
+    size === 'xs'
+      ? 'w-5 h-5 rounded-md'
+      : size === 'sm'
       ? 'w-7 h-7 rounded-lg'
       : size === 'lg'
       ? 'w-12 h-12 rounded-2xl'
       : 'w-9 h-9 rounded-xl';
 
   const iconSize =
-    size === 'sm'
+    size === 'xs'
+      ? 'w-3 h-3'
+      : size === 'sm'
       ? 'w-3.5 h-3.5'
       : size === 'lg'
       ? 'w-6 h-6'
       : 'w-4 h-4';
 
-  const colorStyle = (() => {
-    switch (key) {
-      case 'coffee':
-        return 'bg-amber-500/15 border-amber-500/40 text-amber-400';
-      case 'crown':
-        return 'bg-purple-500/15 border-purple-500/40 text-purple-400';
-      case 'shield':
-        return 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400';
-      case 'wallet':
-        return 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400';
-      case 'heart':
-        return 'bg-rose-500/15 border-rose-500/40 text-rose-400';
-      case 'user':
-      default:
-        return 'bg-indigo-500/15 border-indigo-500/40 text-indigo-400';
-    }
-  })();
+  const colorStyle =
+    tone === 'neutral'
+      ? 'bg-[var(--ql-bg-muted)] border-[var(--ql-hairline)] text-[var(--ql-text-secondary)]'
+      : (() => {
+          switch (key) {
+            case 'coffee':
+              return 'bg-[var(--ql-tone-amber-soft)] border-[var(--ql-hairline)] text-[var(--ql-tone-amber)]';
+            case 'crown':
+              return 'bg-[var(--ql-tone-plum-soft)] border-[var(--ql-hairline)] text-[var(--ql-tone-plum)]';
+            case 'shield':
+              return 'bg-[var(--ql-bg-muted)] border-[var(--ql-hairline)] text-[var(--ql-text-primary)]';
+            case 'wallet':
+              return 'bg-[var(--ql-tone-sage-soft)] border-[var(--ql-hairline)] text-[var(--ql-tone-sage)]';
+            case 'heart':
+              return 'bg-[var(--ql-tone-terracotta-soft)] border-[var(--ql-hairline)] text-[var(--ql-tone-terracotta)]';
+            case 'user':
+            default:
+              return 'bg-[var(--ql-tone-slate-soft)] border-[var(--ql-hairline)] text-[var(--ql-tone-slate)]';
+          }
+        })();
 
   const renderIcon = () => {
     switch (key) {
@@ -97,7 +107,12 @@ export const UserAvatarIcon: React.FC<UserAvatarIconProps> = ({
 
   return (
     <div
-      className={`inline-flex items-center justify-center border shrink-0 transition-colors ${containerSize} ${colorStyle} ${className}`}
+      className={cn(
+        'inline-flex items-center justify-center border shrink-0 transition-colors',
+        containerSize,
+        colorStyle,
+        className
+      )}
     >
       {renderIcon()}
     </div>

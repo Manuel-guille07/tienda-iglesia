@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { cn } from '../../lib/cn';
 
 interface ModalProps {
   isOpen: boolean;
@@ -19,9 +19,6 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'md',
 }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -47,25 +44,25 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/55 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
-        className={`w-full ${maxWidths[maxWidth]} rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-colors ${
-          isDark
-            ? 'bg-[#171412] border border-[#2A2420] text-[#F4F0EA]'
-            : 'bg-[#FAF8F5] border border-[#E2DDD5] text-[#141210]'
-        }`}
+        role="dialog"
+        aria-modal="true"
+        className={cn(
+          'w-full rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[92vh] border border-[var(--ql-hairline)] bg-[var(--ql-bg-card)] text-[var(--ql-text-primary)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)] transition-colors',
+          maxWidths[maxWidth]
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          className={`flex items-center justify-between px-6 py-4 border-b shrink-0 ${
-            isDark ? 'border-[#2A2420]' : 'border-[#E2DDD5]'
-          }`}
-        >
-          <div>
-            <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--ql-hairline)] shrink-0">
+          <div className="min-w-0 pr-2">
+            <h3 className="text-base sm:text-lg font-semibold tracking-tight truncate">{title}</h3>
             {description && (
-              <p className={`text-sm mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#6E665E]'}`}>
+              <p className="text-xs sm:text-sm mt-0.5 text-[var(--ql-text-secondary)]">
                 {description}
               </p>
             )}
@@ -74,18 +71,14 @@ export const Modal: React.FC<ModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition cursor-pointer ${
-              isDark
-                ? 'text-[#9A9086] hover:text-[#F4F0EA] hover:bg-[#211D1A]'
-                : 'text-[#6E665E] hover:text-[#141210] hover:bg-[#EFECE6]'
-            }`}
+            className="w-9 h-9 rounded-full bg-[var(--ql-bg-elevated)] border border-[var(--ql-hairline)] text-[var(--ql-text-secondary)] hover:text-[var(--ql-text-primary)] flex items-center justify-center transition-colors cursor-pointer shrink-0 ql-focus-ring"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-4">
+        <div className="p-5 sm:p-6 pb-safe sm:pb-6 overflow-y-auto space-y-4">
           {children}
         </div>
       </div>

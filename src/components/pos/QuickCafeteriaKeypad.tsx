@@ -2,7 +2,8 @@ import React from 'react';
 import { usePOSStore, getProductStockInfo } from '../../store/usePOSStore';
 import { useTheme } from '../../context/ThemeContext';
 import { QuickColor } from '../../types';
-import { Plus, AlertTriangle, Ban, Zap } from 'lucide-react';
+import { Plus, AlertTriangle, Ban } from 'lucide-react';
+import { SurfaceCard } from '../ui/SurfaceCard';
 
 const LEGACY_TOKEN_TO_HEX: Record<string, string> = {
   sage: '#059669',
@@ -89,63 +90,17 @@ export const QuickCafeteriaKeypad: React.FC = () => {
 
   if (presets.length === 0) {
     return (
-      <div
-        className={`rounded-3xl p-8 text-center border ${
-          isDark
-            ? 'bg-[#171412] border-[#2A2420] text-[#9A9086]'
-            : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#6E665E]'
-        }`}
-      >
-        <p className="text-base font-medium">No hay productos rápidos disponibles.</p>
-      </div>
+      <SurfaceCard padding="lg" radius="xl" className="text-center">
+        <p className="text-sm font-medium text-[var(--ql-text-secondary)]">
+          No hay productos rápidos disponibles.
+        </p>
+      </SurfaceCard>
     );
   }
 
   return (
-    <div
-      className={`rounded-3xl p-4 sm:p-5 border transition-colors ${
-        isDark
-          ? 'bg-[#171412] border-[#2A2420] text-[#F4F0EA]'
-          : 'bg-[#FAF8F5] border-[#E2DDD5] text-[#141210]'
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2 mb-3.5">
-        <div className="flex items-center gap-2">
-          <span
-            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-              isDark
-                ? 'bg-[#EFECE6] text-[#141210]'
-                : 'bg-[#141210] text-[#FAF8F5]'
-            }`}
-          >
-            <Zap className="w-4 h-4" />
-          </span>
-          <div>
-            <h2 className="text-base sm:text-lg font-semibold tracking-tight leading-none">
-              Botones Rápidos
-            </h2>
-            <p
-              className={`text-xs mt-1 ${
-                isDark ? 'text-[#9A9086]' : 'text-[#4A433D]'
-              }`}
-            >
-              Cobro directo con 1 toque para productos estrella
-            </p>
-          </div>
-        </div>
-
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-            isDark
-              ? 'bg-[#211D1A] border-[#2A2420] text-[#9A9086]'
-              : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210]'
-          }`}
-        >
-          {presets.length} directos
-        </span>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+    <SurfaceCard padding="sm" radius="xl" className="sm:p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
         {presets.map((product) => {
           const stockInfo = getProductStockInfo(product, rawMaterials);
           const isOut = stockInfo.status === 'out';
@@ -269,6 +224,6 @@ export const QuickCafeteriaKeypad: React.FC = () => {
           );
         })}
       </div>
-    </div>
+    </SurfaceCard>
   );
 };

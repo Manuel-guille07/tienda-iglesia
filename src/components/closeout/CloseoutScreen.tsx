@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { usePOSStore } from '../../store/usePOSStore';
 import {
   useCloseoutStore,
@@ -24,8 +25,11 @@ import {
   ShoppingBag,
   PackageCheck,
   Clock,
+  ChevronDown,
+  Share,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { QL_EASE_OUT } from '../../lib/motion';
 import { IncidentModal } from './IncidentModal';
 import { IncidentListPanel } from './IncidentListPanel';
 import { CashArqueoPanel } from './CashArqueoPanel';
@@ -75,7 +79,27 @@ export const CloseoutScreen: React.FC = () => {
   const [selectedHistoricalIndex, setSelectedHistoricalIndex] = useState<number | null>(null);
   const [isClosingShift, setIsClosingShift] = useState(false);
   const [sendingCloseoutIds, setSendingCloseoutIds] = useState<string[]>([]);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const closingLock = isClosingShift || isStoreClosingShift;
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExportMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [exportMenuOpen]);
   const canSendHistoricalToSheets =
     isUserAdminOrSupervisor(currentUser?.role) && isGoogleSheetsConfigured();
 
@@ -365,67 +389,113 @@ export const CloseoutScreen: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
-      {/* Cabecera */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2.5">
-            <Calculator className="w-6 h-6" />
-            {t('closeout.title')}
+      {/* Cabecera compacta con menú único de Exportar */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight flex items-center gap-2 text-[var(--ql-text-primary)]">
+            <Calculator className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-[var(--ql-text-secondary)]" />
+            <span className="truncate">{t('closeout.title')}</span>
           </h2>
-          <p className={`text-sm mt-0.5 ${isDark ? 'text-[#9A9086]' : 'text-[#141210]'}`}>
+          <p className="text-xs sm:text-sm mt-1 text-[var(--ql-text-secondary)] leading-snug">
             {t('closeout.sharedDrawer')} · Responsable:{' '}
-            <strong className="font-semibold">{currentUser?.name}</strong>
+            <strong className="font-semibold text-[var(--ql-text-primary)]">
+              {currentUser?.name}
+            </strong>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        <div ref={exportMenuRef} className="relative shrink-0">
           <Button
-            variant="outline"
-            size="sm"
-            icon={<Download className="w-4 h-4" />}
-            onClick={() => {
-              const draftShift: ShiftClose = {
-                ...getShift(),
-                id: `draft-${Date.now()}`,
-                timestamp: new Date().toISOString(),
-                exportStatus: 'pending',
-              };
-              downloadCSV(draftShift, shiftSales, shiftTabPayments);
-              toast.success(t('export.csvSuccess'));
-            }}
-          >
-            {t('export.csvButton')}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<Printer className="w-4 h-4" />}
-            onClick={() => {
-              setSelectedHistoricalIndex(null);
-              setPdfModalOpen(true);
-              toast.success(t('export.pdfReady'));
-            }}
-          >
-            {t('export.pdfButton')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={isSyncingSheets || closingLock}
+            variant="subtle"
+            size="xs"
             isLoading={isSyncingSheets}
-            icon={<FileSpreadsheet className="w-4 h-4" />}
-            onClick={async () => {
-              if (isSyncingSheets) return;
-              const targetId = shiftCloses[0]?.id || 'draft';
-              const res = await exportToGoogleSheets(targetId);
-              if (res.success) {
-                toast.success(res.message);
-              } else {
-                toast(res.message, { icon: '⚠️' });
-              }
-            }}
+            aria-haspopup="menu"
+            aria-expanded={exportMenuOpen}
+            icon={!isSyncingSheets ? <Share className="w-3.5 h-3.5" /> : undefined}
+            onClick={() => setExportMenuOpen((prev) => !prev)}
+            className="gap-1.5"
           >
-            Sheets
+            <span>Exportar</span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-[var(--ql-text-muted)] transition-transform duration-150 ${
+                exportMenuOpen ? 'rotate-180' : ''
+              }`}
+            />
           </Button>
+
+          <AnimatePresence>
+            {exportMenuOpen && (
+              <motion.div
+                role="menu"
+                aria-label="Opciones de exportación de caja"
+                initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                transition={QL_EASE_OUT}
+                className="absolute right-0 mt-2 w-56 p-1.5 rounded-2xl border border-[var(--ql-hairline-strong)] bg-[var(--ql-bg-card)] [box-shadow:var(--ql-inner-highlight),var(--ql-shadow-lg)] z-30 origin-top-right"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    const draftShift: ShiftClose = {
+                      ...getShift(),
+                      id: `draft-${Date.now()}`,
+                      timestamp: new Date().toISOString(),
+                      exportStatus: 'pending',
+                    };
+                    downloadCSV(draftShift, shiftSales, shiftTabPayments);
+                    toast.success(t('export.csvSuccess'));
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl text-left text-sm font-medium text-[var(--ql-text-primary)] hover:bg-[var(--ql-bg-elevated)] flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-[var(--ql-text-secondary)] shrink-0" />
+                  <span className="truncate">{t('export.csvButton')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setExportMenuOpen(false);
+                    setSelectedHistoricalIndex(null);
+                    setPdfModalOpen(true);
+                    toast.success(t('export.pdfReady'));
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl text-left text-sm font-medium text-[var(--ql-text-primary)] hover:bg-[var(--ql-bg-elevated)] flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <Printer className="w-4 h-4 text-[var(--ql-text-secondary)] shrink-0" />
+                  <span className="truncate">{t('export.pdfButton')}</span>
+                </button>
+
+                <div className="my-1 border-t border-[var(--ql-hairline)]" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={isSyncingSheets || closingLock}
+                  onClick={async () => {
+                    if (isSyncingSheets) return;
+                    setExportMenuOpen(false);
+                    const targetId = shiftCloses[0]?.id || 'draft';
+                    const res = await exportToGoogleSheets(targetId);
+                    if (res.success) {
+                      toast.success(res.message);
+                    } else {
+                      toast(res.message, { icon: '⚠️' });
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl text-left text-sm font-medium text-[var(--ql-text-primary)] hover:bg-[var(--ql-bg-elevated)] disabled:opacity-45 disabled:pointer-events-none flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-[var(--ql-tone-sage)] shrink-0" />
+                  <span className="truncate">
+                    {isSyncingSheets ? 'Sincronizando...' : 'Google Sheets'}
+                  </span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ export const Toaster = () => {
       gutter={8}
       containerStyle={{
         top: 'max(14px, env(safe-area-inset-top, 14px))',
+        zIndex: 9999,
       }}
       toastOptions={{
         duration: 2400,

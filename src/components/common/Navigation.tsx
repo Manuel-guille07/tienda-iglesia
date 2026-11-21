@@ -1,14 +1,16 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useUIStore } from '../../store/useUIStore';
-import { useTheme } from '../../context/ThemeContext';
+import { SegmentedControl, type SegmentedOption } from '../ui/SegmentedControl';
+import { QL_SPRING_SNAPPY, QL_SPRING_TACTILE } from '../../lib/motion';
+import { cn } from '../../lib/cn';
 import {
   ShoppingBag,
   Users,
   Calculator,
   LayoutGrid,
-  ChevronDown,
 } from 'lucide-react';
 
 export function isUserAdminOrSupervisor(role?: string): boolean {
@@ -26,165 +28,217 @@ export function isUserAdminOrSupervisor(role?: string): boolean {
   );
 }
 
+type NavId = 'pos' | 'tabs' | 'closeout' | 'gestion';
+
+const ADMIN_PATHS = ['/inventory', '/dashboard', '/historial', '/usuarios'];
+
 export const Navigation: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { isGestionOpen, setIsGestionOpen, toggleGestionOpen } = useUIStore();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
 
   const isAdminOrSupervisor = isUserAdminOrSupervisor(currentUser?.role);
+  const isActiveAdminRoute = ADMIN_PATHS.includes(location.pathname);
 
   // 3 Vistas operativas principales (Visibles para Vendedor y todos los roles)
   const coreItems = [
     {
-      id: 'pos',
+      id: 'pos' as const,
       label: 'Vender',
       path: '/pos',
       icon: ShoppingBag,
     },
     {
-      id: 'tabs',
+      id: 'tabs' as const,
       label: 'Fiados',
       path: '/tabs',
       icon: Users,
     },
     {
-      id: 'closeout',
+      id: 'closeout' as const,
       label: 'Caja',
       path: '/closeout',
       icon: Calculator,
     },
   ];
 
-  const adminPaths = ['/inventory', '/dashboard', '/historial', '/usuarios'];
-  const isActiveAdminRoute = adminPaths.includes(location.pathname);
+  const activeNavId: NavId =
+    isAdminOrSupervisor && (isGestionOpen || isActiveAdminRoute)
+      ? 'gestion'
+      : location.pathname === '/tabs'
+      ? 'tabs'
+      : location.pathname === '/closeout'
+      ? 'closeout'
+      : 'pos';
+
+  const handleSelectNav = (id: NavId) => {
+    if (id === 'gestion') {
+      if (isAdminOrSupervisor) {
+        toggleGestionOpen();
+      }
+      return;
+    }
+    const target = coreItems.find((item) => item.id === id);
+    if (target) {
+      setIsGestionOpen(false);
+      navigate(target.path);
+    }
+  };
+
+  const desktopOptions: SegmentedOption<NavId>[] = [
+    ...coreItems.map((item) => {
+      const Icon = item.icon;
+      return {
+        value: item.id,
+        label: item.label,
+        icon: <Icon className="w-4 h-4" />,
+      };
+    }),
+    ...(isAdminOrSupervisor
+      ? [
+          {
+            value: 'gestion' as const,
+            label: 'Gestión',
+            icon: <LayoutGrid className="w-4 h-4" />,
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <nav
-      className={`w-full max-w-full overflow-x-hidden border-b transition-colors duration-200 relative z-30 ${
-        isDark
-          ? 'bg-[#171412] border-[#2A2420]'
-          : 'bg-[#FAF8F5] border-[#E2DDD5]'
-      }`}
-    >
-      {/* Fila Inferior de Navegación en Móvil (< 768px): Ancho distribuido 100% sin scroll lateral */}
-      <div className="md:hidden w-full max-w-full px-2.5 py-2">
+    <>
+      {/* Tablet / Desktop (>= 768px): SegmentedControl compacto integrado arriba */}
+      <nav
+        aria-label="Navegación principal"
+        className="hidden md:block w-full sticky top-[52px] z-30 ql-glass border-b border-[var(--ql-hairline)] transition-colors duration-200"
+      >
+        <div className="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between gap-4">
+          <SegmentedControl
+            options={desktopOptions}
+            value={activeNavId}
+            onChange={handleSelectNav}
+            layoutId="ql-desktop-nav-pill"
+            variant="accent"
+            size="sm"
+            ariaLabel="Secciones de la aplicación"
+          />
+
+          {isAdminOrSupervisor && isActiveAdminRoute && (
+            <span className="text-xs font-medium text-[var(--ql-text-muted)]">
+              Vista administrativa
+            </span>
+          )}
+        </div>
+      </nav>
+
+      {/* Móvil (< 768px): Barra inferior fija estilo app nativa iOS */}
+      <nav
+        aria-label="Navegación inferior"
+        style={{ paddingBottom: 'var(--ql-safe-bottom)' }}
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 ql-glass border-t border-[var(--ql-hairline)] [box-shadow:0_-1px_0_var(--ql-hairline),0_-8px_24px_-12px_rgba(20,18,16,0.12)]"
+      >
         <div
-          className={`grid gap-1.5 w-full ${
+          className={cn(
+            'grid w-full max-w-lg mx-auto h-[var(--ql-mobile-nav-h)] px-2',
             isAdminOrSupervisor ? 'grid-cols-4' : 'grid-cols-3'
-          }`}
+          )}
         >
           {coreItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+            const isActive = activeNavId === item.id;
 
             return (
-              <button
+              <motion.button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  setIsGestionOpen(false);
-                  navigate(item.path);
-                }}
-                className={`min-h-[46px] px-2 py-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold transition cursor-pointer select-none min-w-0 ${
+                whileTap={{ scale: 0.92 }}
+                transition={QL_SPRING_TACTILE}
+                onClick={() => handleSelectNav(item.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'relative flex flex-col items-center justify-center gap-1 min-w-0 cursor-pointer select-none ql-focus-ring rounded-xl transition-colors duration-150',
                   isActive
-                    ? isDark
-                      ? 'bg-[#EFECE6] text-[#141210] shadow-sm'
-                      : 'bg-[#141210] text-[#FAF8F5] shadow-sm'
-                    : isDark
-                    ? 'bg-[#211D1A] text-[#9A9086] hover:text-[#F4F0EA] border border-[#2A2420]'
-                    : 'bg-[#EFECE6] text-[#6E665E] hover:text-[#141210] border border-[#E2DDD5]'
-                }`}
+                    ? 'text-[var(--ql-text-primary)]'
+                    : 'text-[var(--ql-text-muted)] hover:text-[var(--ql-text-secondary)]'
+                )}
               >
-                <Icon className="w-4 h-4 shrink-0 pointer-events-none" />
-                <span className="truncate pointer-events-none">{item.label}</span>
-              </button>
+                <span className="relative flex items-center justify-center w-12 h-7">
+                  {isActive && (
+                    <motion.span
+                      layoutId="ql-mobile-nav-pill"
+                      transition={QL_SPRING_SNAPPY}
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-full bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
+                    />
+                  )}
+                  <Icon
+                    className={cn(
+                      'relative z-10 w-[18px] h-[18px] shrink-0 transition-colors',
+                      isActive && 'text-[var(--ql-accent-text)]'
+                    )}
+                    strokeWidth={isActive ? 2.2 : 1.85}
+                  />
+                </span>
+                <span
+                  className={cn(
+                    'text-[11px] leading-none truncate max-w-full',
+                    isActive ? 'font-semibold text-[var(--ql-text-primary)]' : 'font-medium'
+                  )}
+                >
+                  {item.label}
+                </span>
+              </motion.button>
             );
           })}
 
-          {/* 4º Botón "Gestión" en Móvil (Exclusivo para super_admin, pastor, tesoreria; 100% oculto para vendedor) */}
+          {/* 4º Botón "Gestión" exclusivo para roles admin/supervisor (oculto para Vendedor) */}
           {isAdminOrSupervisor && (
-            <button
+            <motion.button
               type="button"
-              onClick={() => toggleGestionOpen()}
+              whileTap={{ scale: 0.92 }}
+              transition={QL_SPRING_TACTILE}
+              onClick={() => handleSelectNav('gestion')}
               aria-expanded={isGestionOpen}
               aria-label="Abrir menú de Gestión"
-              className={`min-h-[46px] px-2 py-2 rounded-2xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-semibold transition cursor-pointer select-none min-w-0 active:scale-[0.98] ${
-                isActiveAdminRoute || isGestionOpen
-                  ? isDark
-                    ? 'bg-[#EFECE6] text-[#141210] shadow-sm'
-                    : 'bg-[#141210] text-[#FAF8F5] shadow-sm'
-                  : isDark
-                  ? 'bg-[#211D1A] text-[#F4F0EA] border border-[#2A2420]'
-                  : 'bg-[#EFECE6] text-[#141210] border border-[#E2DDD5]'
-              }`}
+              className={cn(
+                'relative flex flex-col items-center justify-center gap-1 min-w-0 cursor-pointer select-none ql-focus-ring rounded-xl transition-colors duration-150',
+                activeNavId === 'gestion'
+                  ? 'text-[var(--ql-text-primary)]'
+                  : 'text-[var(--ql-text-muted)] hover:text-[var(--ql-text-secondary)]'
+              )}
             >
-              <LayoutGrid className="w-4 h-4 shrink-0 pointer-events-none" />
-              <span className="truncate pointer-events-none">Gestión</span>
-            </button>
+              <span className="relative flex items-center justify-center w-12 h-7">
+                {activeNavId === 'gestion' && (
+                  <motion.span
+                    layoutId="ql-mobile-nav-pill"
+                    transition={QL_SPRING_SNAPPY}
+                    aria-hidden="true"
+                    className="absolute inset-0 rounded-full bg-[var(--ql-accent-bg)] [box-shadow:var(--ql-shadow-sm)]"
+                  />
+                )}
+                <LayoutGrid
+                  className={cn(
+                    'relative z-10 w-[18px] h-[18px] shrink-0 transition-colors',
+                    activeNavId === 'gestion' && 'text-[var(--ql-accent-text)]'
+                  )}
+                  strokeWidth={activeNavId === 'gestion' ? 2.2 : 1.85}
+                />
+              </span>
+              <span
+                className={cn(
+                  'text-[11px] leading-none truncate max-w-full',
+                  activeNavId === 'gestion'
+                    ? 'font-semibold text-[var(--ql-text-primary)]'
+                    : 'font-medium'
+                )}
+              >
+                Gestión
+              </span>
+            </motion.button>
           )}
         </div>
-      </div>
-
-      {/* Barra de Navegación Superior en Tablet / PC (>= 768px) */}
-      <div className="hidden md:flex max-w-7xl mx-auto px-6 py-2.5 items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          {coreItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setIsGestionOpen(false);
-                  navigate(item.path);
-                }}
-                className={`min-h-[48px] px-6 rounded-full flex items-center gap-2.5 text-base font-medium transition cursor-pointer select-none ${
-                  isActive
-                    ? isDark
-                      ? 'bg-[#EFECE6] text-[#141210] font-semibold shadow-sm'
-                      : 'bg-[#141210] text-[#FAF8F5] font-semibold shadow-sm'
-                    : isDark
-                    ? 'text-[#9A9086] hover:text-[#F4F0EA] hover:bg-[#211D1A]'
-                    : 'text-[#6E665E] hover:text-[#141210] hover:bg-[#EFECE6]'
-                }`}
-              >
-                <Icon className="w-5 h-5 shrink-0 pointer-events-none" />
-                <span className="pointer-events-none">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {isAdminOrSupervisor && (
-          <button
-            type="button"
-            onClick={() => toggleGestionOpen()}
-            aria-expanded={isGestionOpen}
-            className={`min-h-[48px] px-5 rounded-full border flex items-center gap-2.5 text-base font-medium transition cursor-pointer select-none ${
-              isActiveAdminRoute || isGestionOpen
-                ? isDark
-                  ? 'bg-[#EFECE6] text-[#141210] border-[#EFECE6] font-semibold'
-                  : 'bg-[#141210] text-[#FAF8F5] border-[#141210] font-semibold'
-                : isDark
-                ? 'bg-[#211D1A] border-[#2A2420] text-[#F4F0EA] hover:border-[#3D352F]'
-                : 'bg-[#EFECE6] border-[#E2DDD5] text-[#141210] hover:border-[#CFC8BC]'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4 shrink-0 pointer-events-none" />
-            <span className="pointer-events-none">Gestión</span>
-            <ChevronDown
-              className={`w-4 h-4 transition-transform pointer-events-none ${
-                isGestionOpen ? 'rotate-180' : ''
-              }`}
-            />
-          </button>
-        )}
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 };
