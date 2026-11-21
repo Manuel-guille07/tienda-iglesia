@@ -2,34 +2,109 @@
 
 :root,
 html[data-theme="light"] {
+  /* Superficies por capas — Quiet Luxury (Piedra cálida / Marfil / Tinta) */
   --ql-bg-app: #EFECE6;
   --ql-bg-card: #FAF8F5;
   --ql-bg-elevated: #F2EFE9;
   --ql-bg-muted: #E6E1D8;
+  --ql-bg-glass: rgba(250, 248, 245, 0.84);
+
+  /* Bordes sólidos (compatibilidad) y Hairlines semitransparentes 2026 */
   --ql-border: #E2DDD5;
   --ql-border-strong: #CFC8BC;
+  --ql-hairline: rgba(20, 18, 16, 0.085);
+  --ql-hairline-strong: rgba(20, 18, 16, 0.16);
+  --ql-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+
+  /* Tipografía */
   --ql-text-primary: #141210;
-  --ql-text-secondary: #6E665E;
+  --ql-text-secondary: #675F57;
   --ql-text-muted: #8C8379;
+
+  /* Acento principal (Tinta) */
   --ql-accent-bg: #141210;
+  --ql-accent-hover: #272320;
   --ql-accent-text: #FAF8F5;
-  --ql-shadow: 0 10px 30px -10px rgba(20, 18, 16, 0.08);
+
+  /* Paleta mineral semántica (micro-acentos sobrios, nunca bloques chillones) */
+  --ql-tone-sage: #2D6A4F;
+  --ql-tone-sage-soft: rgba(45, 106, 79, 0.09);
+  --ql-tone-slate: #355C7D;
+  --ql-tone-slate-soft: rgba(53, 92, 125, 0.09);
+  --ql-tone-amber: #9A5B13;
+  --ql-tone-amber-soft: rgba(154, 91, 19, 0.1);
+  --ql-tone-plum: #6B4E71;
+  --ql-tone-plum-soft: rgba(107, 78, 113, 0.09);
+  --ql-tone-terracotta: #A63A3A;
+  --ql-tone-terracotta-soft: rgba(166, 58, 58, 0.09);
+
+  /* Sombras multicapa (contacto + ambiente) */
+  --ql-shadow-sm:
+    0 1px 2px rgba(20, 18, 16, 0.05),
+    0 1px 1px rgba(20, 18, 16, 0.03);
+  --ql-shadow:
+    0 1px 2px rgba(20, 18, 16, 0.04),
+    0 8px 24px -10px rgba(20, 18, 16, 0.08);
+  --ql-shadow-lg:
+    0 2px 6px rgba(20, 18, 16, 0.06),
+    0 18px 42px -14px rgba(20, 18, 16, 0.14);
+
+  /* Métricas de layout móvil / PWA (preparadas para barra inferior fija iOS) */
+  --ql-mobile-nav-h: 68px;
+  --ql-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --ql-safe-top: env(safe-area-inset-top, 0px);
+
   color-scheme: light;
 }
 
 html[data-theme="dark"] {
+  /* Superficies por capas — Quiet Luxury Oscuro (Obsidiana cálida / Carbón) */
   --ql-bg-app: #0E0C0B;
   --ql-bg-card: #171412;
   --ql-bg-elevated: #211D1A;
   --ql-bg-muted: #2A2420;
+  --ql-bg-glass: rgba(23, 20, 18, 0.84);
+
+  /* Bordes sólidos y Hairlines semitransparentes */
   --ql-border: #2A2420;
   --ql-border-strong: #3D352F;
+  --ql-hairline: rgba(244, 240, 234, 0.085);
+  --ql-hairline-strong: rgba(244, 240, 234, 0.16);
+  --ql-inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+
+  /* Tipografía */
   --ql-text-primary: #F4F0EA;
-  --ql-text-secondary: #9A9086;
+  --ql-text-secondary: #9E948A;
   --ql-text-muted: #786F66;
+
+  /* Acento principal (Marfil cálido) */
   --ql-accent-bg: #EFECE6;
+  --ql-accent-hover: #FAF8F5;
   --ql-accent-text: #141210;
-  --ql-shadow: 0 14px 36px -10px rgba(0, 0, 0, 0.55);
+
+  /* Paleta mineral semántica calibrada para oscuro */
+  --ql-tone-sage: #6BB38E;
+  --ql-tone-sage-soft: rgba(107, 179, 142, 0.13);
+  --ql-tone-slate: #7FA7C9;
+  --ql-tone-slate-soft: rgba(127, 167, 201, 0.13);
+  --ql-tone-amber: #DCA259;
+  --ql-tone-amber-soft: rgba(220, 162, 89, 0.14);
+  --ql-tone-plum: #B89AC0;
+  --ql-tone-plum-soft: rgba(184, 154, 192, 0.14);
+  --ql-tone-terracotta: #DF7A7A;
+  --ql-tone-terracotta-soft: rgba(223, 122, 122, 0.14);
+
+  /* Sombras multicapa en oscuro */
+  --ql-shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.32),
+    0 1px 1px rgba(0, 0, 0, 0.22);
+  --ql-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 12px 32px -10px rgba(0, 0, 0, 0.52);
+  --ql-shadow-lg:
+    0 4px 10px rgba(0, 0, 0, 0.4),
+    0 22px 48px -12px rgba(0, 0, 0, 0.72);
+
   color-scheme: dark;
 }
 
@@ -43,11 +118,17 @@ html[data-theme="dark"] {
     color: var(--ql-text-primary);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
-/* Quiet Luxury Semantic Classes */
+/* ============================================================================
+ * Quiet Luxury Semantic Classes
+ * ============================================================================ */
+
 .ql-bg-app {
   background-color: var(--ql-bg-app);
   color: var(--ql-text-primary);
@@ -55,15 +136,23 @@ html[data-theme="dark"] {
 
 .ql-card {
   background-color: var(--ql-bg-card);
-  border: 1px solid var(--ql-border);
+  border: 1px solid var(--ql-hairline);
   color: var(--ql-text-primary);
-  box-shadow: var(--ql-shadow);
+  box-shadow: var(--ql-inner-highlight), var(--ql-shadow);
 }
 
 .ql-elevated {
   background-color: var(--ql-bg-elevated);
-  border: 1px solid var(--ql-border);
+  border: 1px solid var(--ql-hairline);
   color: var(--ql-text-primary);
+  box-shadow: var(--ql-inner-highlight);
+}
+
+.ql-glass {
+  background-color: var(--ql-bg-glass);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  border-color: var(--ql-hairline);
 }
 
 .ql-text-primary {
@@ -74,8 +163,12 @@ html[data-theme="dark"] {
   color: var(--ql-text-secondary);
 }
 
+.ql-text-muted {
+  color: var(--ql-text-muted);
+}
+
 .ql-border {
-  border-color: var(--ql-border);
+  border-color: var(--ql-hairline);
 }
 
 .ql-accent {
@@ -83,69 +176,17 @@ html[data-theme="dark"] {
   color: var(--ql-accent-text);
 }
 
-/* Adaptive Quiet Luxury mapping for secondary admin screens in Light Mode */
-html[data-theme="light"] .bg-slate-950,
-html[data-theme="light"] .bg-slate-950\/80,
-html[data-theme="light"] .bg-slate-950\/40 {
-  background-color: var(--ql-bg-elevated) !important;
+/* Tipografía numérica estricta para importes y contadores del TPV */
+.ql-num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
+  letter-spacing: -0.02em;
 }
 
-html[data-theme="light"] .bg-slate-900,
-html[data-theme="light"] .bg-slate-900\/90,
-html[data-theme="light"] .bg-slate-900\/95,
-html[data-theme="light"] .bg-slate-900\/60 {
-  background-color: var(--ql-bg-card) !important;
-}
-
-html[data-theme="light"] .bg-slate-800,
-html[data-theme="light"] .bg-slate-800\/80,
-html[data-theme="light"] .bg-slate-800\/60,
-html[data-theme="light"] .bg-slate-800\/40 {
-  background-color: var(--ql-bg-elevated) !important;
-}
-
-html[data-theme="light"] .border-slate-800,
-html[data-theme="light"] .border-slate-800\/80,
-html[data-theme="light"] .border-slate-800\/60,
-html[data-theme="light"] .border-slate-700,
-html[data-theme="light"] .border-slate-700\/80,
-html[data-theme="light"] .border-slate-700\/60,
-html[data-theme="light"] .border-slate-750 {
-  border-color: var(--ql-border) !important;
-}
-
-html[data-theme="light"] .text-white,
-html[data-theme="light"] .text-slate-100,
-html[data-theme="light"] .text-slate-200 {
-  color: var(--ql-text-primary) !important;
-}
-
-html[data-theme="light"] .text-slate-300,
-html[data-theme="light"] .text-slate-400,
-html[data-theme="light"] .text-slate-500 {
-  color: var(--ql-text-secondary) !important;
-}
-
-/* Adaptive Quiet Luxury mapping for secondary admin screens in Dark Mode */
-html[data-theme="dark"] .bg-slate-950 {
-  background-color: #0E0C0B !important;
-}
-
-html[data-theme="dark"] .bg-slate-900,
-html[data-theme="dark"] .bg-slate-900\/90,
-html[data-theme="dark"] .bg-slate-900\/95 {
-  background-color: #171412 !important;
-}
-
-html[data-theme="dark"] .bg-slate-800,
-html[data-theme="dark"] .bg-slate-800\/80,
-html[data-theme="dark"] .bg-slate-800\/60 {
-  background-color: #211D1A !important;
-}
-
-html[data-theme="dark"] .border-slate-800,
-html[data-theme="dark"] .border-slate-700 {
-  border-color: #2A2420 !important;
+/* Foco accesible sobrio */
+.ql-focus-ring:focus-visible {
+  outline: 2px solid var(--ql-text-primary);
+  outline-offset: 2px;
 }
 
 /* Hide scrollbars cleanly on horizontal pill bars */
@@ -157,8 +198,24 @@ html[data-theme="dark"] .border-slate-700 {
   scrollbar-width: none;
 }
 
+/* Safe areas PWA */
 .pb-safe {
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 1.25rem));
+}
+
+.pb-mobile-nav {
+  padding-bottom: calc(var(--ql-mobile-nav-h) + var(--ql-safe-bottom) + 1rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media print {

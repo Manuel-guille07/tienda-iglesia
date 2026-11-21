@@ -8,29 +8,46 @@ export const Toaster = () => {
   return (
     <HotToaster
       position="top-center"
+      gutter={8}
+      containerStyle={{
+        top: 'max(14px, env(safe-area-inset-top, 14px))',
+      }}
       toastOptions={{
+        duration: 2400,
         style: {
-          background: isDark ? '#171412' : '#FAF8F5',
-          color: isDark ? '#F4F0EA' : '#141210',
-          border: isDark ? '1px solid #2A2420' : '1px solid #E2DDD5',
-          borderRadius: '9999px',
-          padding: '12px 20px',
-          fontSize: '14px',
+          background: 'var(--ql-bg-glass)',
+          backdropFilter: 'saturate(160%) blur(18px)',
+          WebkitBackdropFilter: 'saturate(160%) blur(18px)',
+          color: 'var(--ql-text-primary)',
+          border: '1px solid var(--ql-hairline-strong)',
+          borderRadius: '14px',
+          padding: '10px 14px',
+          fontSize: '13.5px',
           fontWeight: 500,
-          boxShadow: isDark
-            ? '0 14px 36px -10px rgba(0,0,0,0.6)'
-            : '0 12px 30px -10px rgba(20,18,16,0.12)',
+          lineHeight: '1.35',
+          letterSpacing: '-0.01em',
+          fontVariantNumeric: 'tabular-nums',
+          maxWidth: 'min(92vw, 420px)',
+          boxShadow: 'var(--ql-inner-highlight), var(--ql-shadow-lg)',
         },
         success: {
+          duration: 2200,
           iconTheme: {
-            primary: isDark ? '#EFECE6' : '#141210',
-            secondary: isDark ? '#141210' : '#FAF8F5',
+            primary: isDark ? '#6BB38E' : '#2D6A4F',
+            secondary: isDark ? '#171412' : '#FAF8F5',
           },
         },
         error: {
+          duration: 3800,
           iconTheme: {
-            primary: '#DC2626',
-            secondary: '#FAF8F5',
+            primary: isDark ? '#DF7A7A' : '#A63A3A',
+            secondary: isDark ? '#171412' : '#FAF8F5',
+          },
+        },
+        loading: {
+          iconTheme: {
+            primary: isDark ? '#EFECE6' : '#141210',
+            secondary: isDark ? '#2A2420' : '#E2DDD5',
           },
         },
       }}

@@ -18,8 +18,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   // Si está inicializando la sesión desde Supabase Auth, esperamos
   if (!isInitialized) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen ql-bg-app flex items-center justify-center">
+        <div
+          className="w-7 h-7 border-2 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: 'var(--ql-text-primary)', borderTopColor: 'transparent' }}
+        />
       </div>
     );
   }

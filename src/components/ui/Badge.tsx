@@ -1,61 +1,47 @@
 import React from 'react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import { useTheme } from '../../context/ThemeContext';
+import { cn } from '../../lib/cn';
 
-interface BadgeProps {
+export interface BadgeProps {
   children: React.ReactNode;
-  variant?: 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
+  variant?: 'default' | 'subtle' | 'success' | 'warning' | 'danger' | 'info' | 'purple';
   size?: 'sm' | 'md';
+  dot?: boolean;
   className?: string;
 }
+
+const VARIANT_CLASSES: Record<NonNullable<BadgeProps['variant']>, string> = {
+  default: 'bg-[var(--ql-bg-elevated)] text-[var(--ql-text-primary)] border-[var(--ql-hairline)]',
+  subtle: 'bg-[var(--ql-bg-muted)]/75 text-[var(--ql-text-secondary)] border-[var(--ql-hairline)]',
+  success: 'bg-[var(--ql-tone-sage-soft)] text-[var(--ql-tone-sage)] border-[var(--ql-hairline)]',
+  warning: 'bg-[var(--ql-tone-amber-soft)] text-[var(--ql-tone-amber)] border-[var(--ql-hairline)]',
+  danger:
+    'bg-[var(--ql-tone-terracotta-soft)] text-[var(--ql-tone-terracotta)] border-[var(--ql-hairline)]',
+  info: 'bg-[var(--ql-tone-slate-soft)] text-[var(--ql-tone-slate)] border-[var(--ql-hairline)]',
+  purple: 'bg-[var(--ql-tone-plum-soft)] text-[var(--ql-tone-plum)] border-[var(--ql-hairline)]',
+};
+
+const SIZE_CLASSES: Record<NonNullable<BadgeProps['size']>, string> = {
+  sm: 'text-[11px] leading-tight px-2 py-0.5 gap-1.5',
+  md: 'text-xs leading-tight px-2.5 py-1 gap-1.5',
+};
 
 export const Badge: React.FC<BadgeProps> = ({
   children,
   variant = 'default',
   size = 'md',
+  dot = false,
   className,
 }) => {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
-  const variants = {
-    default: isDark
-      ? 'bg-[#211D1A] text-[#F4F0EA] border-[#2A2420]'
-      : 'bg-[#EFECE6] text-[#141210] border-[#E2DDD5]',
-    success: isDark
-      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60'
-      : 'bg-emerald-100/90 text-emerald-900 border-emerald-300',
-    warning: isDark
-      ? 'bg-amber-950/70 text-amber-300 border-amber-800/60'
-      : 'bg-amber-100/90 text-amber-900 border-amber-300',
-    danger: isDark
-      ? 'bg-rose-950/70 text-rose-300 border-rose-800/60'
-      : 'bg-rose-100/90 text-rose-900 border-rose-300',
-    info: isDark
-      ? 'bg-[#211D1A] text-[#F4F0EA] border-[#2A2420]'
-      : 'bg-[#EFECE6] text-[#141210] border-[#E2DDD5]',
-    purple: isDark
-      ? 'bg-[#2A2420] text-[#EFECE6] border-[#3D352F]'
-      : 'bg-[#E6E1D8] text-[#141210] border-[#CFC8BC]',
-  };
-
-  const sizes = {
-    sm: 'text-xs px-2.5 py-0.5',
-    md: 'text-xs px-3 py-1',
-  };
-
   return (
     <span
-      className={twMerge(
-        clsx(
-          'inline-flex items-center font-medium rounded-full border shrink-0',
-          variants[variant],
-          sizes[size],
-          className
-        )
+      className={cn(
+        'inline-flex items-center font-medium rounded-full border shrink-0 whitespace-nowrap',
+        VARIANT_CLASSES[variant],
+        SIZE_CLASSES[size],
+        className
       )}
     >
+      {dot && <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-current opacity-85" />}
       {children}
     </span>
   );

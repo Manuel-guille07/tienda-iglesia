@@ -321,15 +321,15 @@ export const QADiagnosticModal: React.FC<QADiagnosticModalProps> = ({ isOpen, on
 
   return (
     <Modal isOpen={isOpen} onClose={() => !isRunning && onClose()} title={t('qa.title')}>
-      <div className="space-y-4 text-slate-200">
+      <div className="space-y-4 text-[var(--ql-text-primary)]">
         {/* Top Banner */}
-        <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="bg-[var(--ql-bg-elevated)] border border-[var(--ql-hairline)] rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400">
+            <div className="flex items-center gap-2 text-xs font-semibold text-[var(--ql-tone-slate)]">
               <ShieldCheck className="w-4 h-4" />
               <span>Sandbox de Auditoría en Memoria (Cero Mutación Contable)</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-[11px] text-[var(--ql-text-secondary)] mt-0.5">
               {t('qa.subtitle')}
             </p>
           </div>
@@ -348,19 +348,19 @@ export const QADiagnosticModal: React.FC<QADiagnosticModalProps> = ({ isOpen, on
         {/* Summary KPI Strip */}
         {results.length > 0 && (
           <div className="grid grid-cols-3 gap-2.5">
-            <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-2.5 flex items-center justify-between">
-              <span className="text-xs text-emerald-300 font-semibold">PASS</span>
-              <span className="text-lg font-black font-mono text-emerald-400 tabular-nums">{passCount}</span>
+            <div className="bg-[var(--ql-tone-sage-soft)] border border-[var(--ql-hairline)] rounded-xl p-2.5 flex items-center justify-between">
+              <span className="text-xs text-[var(--ql-tone-sage)] font-semibold">PASS</span>
+              <span className="text-lg font-bold ql-num text-[var(--ql-tone-sage)]">{passCount}</span>
             </div>
-            <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between">
-              <span className="text-xs text-amber-300 font-semibold">WARN</span>
-              <span className="text-lg font-black font-mono text-amber-400 tabular-nums">{warnCount}</span>
+            <div className="bg-[var(--ql-tone-amber-soft)] border border-[var(--ql-hairline)] rounded-xl p-2.5 flex items-center justify-between">
+              <span className="text-xs text-[var(--ql-tone-amber)] font-semibold">WARN</span>
+              <span className="text-lg font-bold ql-num text-[var(--ql-tone-amber)]">{warnCount}</span>
             </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between">
-              <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-cyan-400" /> Latencia
+            <div className="bg-[var(--ql-bg-elevated)] border border-[var(--ql-hairline)] rounded-xl p-2.5 flex items-center justify-between">
+              <span className="text-xs text-[var(--ql-text-secondary)] flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-[var(--ql-tone-slate)]" /> Latencia
               </span>
-              <span className="text-sm font-bold font-mono text-cyan-400 tabular-nums">
+              <span className="text-sm font-semibold ql-num text-[var(--ql-text-primary)]">
                 {totalDurationMs} ms
               </span>
             </div>
@@ -374,41 +374,41 @@ export const QADiagnosticModal: React.FC<QADiagnosticModalProps> = ({ isOpen, on
               key={r.id}
               className={`p-3 rounded-xl border transition ${
                 r.status === 'PASS'
-                  ? 'bg-slate-900/90 border-emerald-500/30'
+                  ? 'bg-[var(--ql-bg-card)] border-[var(--ql-hairline)]'
                   : r.status === 'WARN'
-                  ? 'bg-amber-950/20 border-amber-500/40'
-                  : 'bg-rose-950/20 border-rose-500/40'
+                  ? 'bg-[var(--ql-tone-amber-soft)] border-[var(--ql-hairline-strong)]'
+                  : 'bg-[var(--ql-tone-terracotta-soft)] border-[var(--ql-hairline-strong)]'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {getCategoryIcon(r.category)}
-                  <span className="text-xs font-bold text-white">{r.name}</span>
+                  <span className="text-xs font-semibold text-[var(--ql-text-primary)]">{r.name}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] font-mono text-slate-400 tabular-nums">
+                  <span className="text-[10px] ql-num text-[var(--ql-text-muted)]">
                     {r.durationMs} ms
                   </span>
                   {r.status === 'PASS' ? (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span className="px-2 py-0.5 rounded-md text-[10px] ql-num font-semibold bg-[var(--ql-tone-sage-soft)] text-[var(--ql-tone-sage)] border border-[var(--ql-hairline)] flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
                       PASS
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 text-amber-400" />
+                    <span className="px-2 py-0.5 rounded-md text-[10px] ql-num font-semibold bg-[var(--ql-tone-amber-soft)] text-[var(--ql-tone-amber)] border border-[var(--ql-hairline)] flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
                       {r.status === 'WARN' ? 'WARN' : 'FAIL'}
                     </span>
                   )}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-300 mt-1.5 leading-relaxed">{r.details}</p>
+              <p className="text-[11px] text-[var(--ql-text-secondary)] mt-1.5 leading-relaxed">{r.details}</p>
             </div>
           ))}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+        <div className="flex items-center justify-between pt-2 border-t border-[var(--ql-hairline)] text-[11px] text-[var(--ql-text-secondary)]">
           <span>
             {lastRunAt
               ? `Última ejecución: ${lastRunAt} · ${failCount === 0 ? 'Integridad verificada' : `${failCount} fallo(s)`}`
